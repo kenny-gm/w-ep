@@ -1,0 +1,158 @@
+/* ========================================
+   WB ERP - Element Plus 主题覆盖
+   ======================================== */
+
+:root {
+  /* 主色覆盖为紫色 */
+  --el-color-primary: #8b5cf6;
+  --el-color-primary-light-3: #a78bfa;
+  --el-color-primary-light-5: #ddd6fe;
+  --el-color-primary-light-7: #e9e5ff;
+  --el-color-primary-light-8: #f5f3ff;
+  --el-color-primary-light-9: #faf9ff;
+  --el-color-primary-dark-2: #7c3aed;
+  
+  /* 状态色 */
+  --el-color-success: #10b981;
+  --el-color-warning: #f59e0b;
+  --el-color-danger: #ef4444;
+  --el-color-info: #6b7280;
+  
+  /* 文字颜色 */
+  --el-text-color-primary: #1f2937;
+  --el-text-color-regular: #374151;
+  --el-text-color-secondary: #6b7280;
+  --el-text-color-placeholder: #9ca3af;
+  
+  /* 背景颜色 */
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f3f4f6;
+  --el-bg-color-overlay: #ffffff;
+  
+  /* 边框 */
+  --el-border-color: #e5e7eb;
+  --el-border-color-light: #f3f4f6;
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 4px;
+  
+  /* 字体 */
+  --el-font-size-base: 14px;
+  --el-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ========================================
+   图标大小优化
+   ======================================== */
+
+/* 菜单图标 */
+.el-menu-item .el-icon,
+.el-sub-menu__title .el-icon {
+  font-size: 18px !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-right: 8px;
+}
+
+/* 输入框图标 */
+.el-input__prefix .el-icon,
+.el-input__suffix .el-icon {
+  font-size: 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* 按钮图标 */
+.el-button .el-icon {
+  font-size: 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* 表格图标 */
+.el-table .el-icon {
+  font-size: 16px !important;
+}
+
+/* 卡片图标 */
+.el-card .el-icon {
+  font-size: 18px !important;
+}
+
+/* ========================================
+   表格样式优化
+   ======================================== */
+
+.el-table {
+  --el-table-header-bg-color: #f9fafb;
+  --el-table-row-hover-bg-color: #f3f4f6;
+  font-size: 14px;
+}
+
+.el-table th.el-table__cell {
+  font-weight: 500;
+  color: #374151;
+}
+
+/* ========================================
+   按钮优化
+   ======================================== */
+
+.el-button {
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.el-button--large {
+  padding: 12px 24px;
+}
+
+/* ========================================
+   卡片优化
+   ======================================== */
+
+.el-card {
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+/* ========================================
+   表单优化
+   ======================================== */
+
+.el-form-item__label {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.el-input__wrapper {
+  border-radius: 8px;
+}
+
+/* ========================================
+   侧边栏优化
+   ======================================== */
+
+.sidebar .el-menu {
+  border-right: none;
+}
+
+.sidebar .el-menu-item,
+.sidebar .el-sub-menu__title {
+  height: 48px;
+  line-height: 48px;
+}
+
+.sidebar .el-menu-item.is-active {
+  background-color: rgba(64, 158, 255, 0.1) !important;
+}
+
+/* ========================================
+   下拉菜单优化
+   ======================================== */
+
+.el-dropdown-menu__item {
+  font-size: 14px;
+  padding: 8px 16px;
+}

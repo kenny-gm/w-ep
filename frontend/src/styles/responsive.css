@@ -1,0 +1,117 @@
+/* ========================================
+   WB ERP - 响应式设计
+   ======================================== */
+
+/* ========== 移动端隐藏/显示 ========== */
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-on-mobile {
+    display: none !important;
+  }
+}
+
+/* ========== 表格移动端变卡片 ========== */
+@media (max-width: 768px) {
+  .mobile-table .el-table__header {
+    display: none;
+  }
+  
+  .mobile-table .el-table__row {
+    display: block;
+    border: 1px solid var(--border-color);
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+  }
+  
+  .mobile-table .el-table__cell {
+    display: flex;
+    justify-content: space-between;
+    border: none !important;
+    padding: var(--spacing-sm) 0;
+  }
+  
+  .mobile-table .el-table__cell::before {
+    content: attr(data-label);
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+}
+
+/* ========== 响应式布局 ========== */
+@media (max-width: 768px) {
+  /* 侧边栏隐藏 */
+  .sidebar {
+    position: fixed;
+    left: -220px;
+    z-index: 1000;
+    transition: left 0.3s;
+  }
+  
+  .sidebar.open {
+    left: 0;
+  }
+  
+  /* 主内容区全宽 */
+  .main-content {
+    margin-left: 0;
+  }
+  
+  /* 看板卡片单列 */
+  .dashboard .el-row .el-col {
+    width: 100%;
+    margin-bottom: var(--spacing-md);
+  }
+  
+  /* 筛选表单堆叠 */
+  .filter-form {
+    flex-direction: column;
+  }
+  
+  .filter-form .el-form-item {
+    width: 100%;
+    margin-right: 0;
+  }
+  
+  /* 数字卡片缩小 */
+  .stat-card {
+    padding: var(--spacing-md);
+  }
+  
+  .stat-value {
+    font-size: var(--font-size-xl);
+  }
+}
+
+/* ========== iPad 适配 ========== */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .sidebar {
+    width: 180px;
+  }
+  
+  .main-content {
+    margin-left: 180px;
+  }
+  
+  /* 看板卡片两列 */
+  .dashboard .el-row .el-col {
+    width: 50%;
+  }
+}
+
+/* ========== 大屏优化 ========== */
+@media (min-width: 1920px) {
+  :root {
+    --font-size-base: 16px;
+  }
+  
+  .container {
+    max-width: 1600px;
+  }
+}
