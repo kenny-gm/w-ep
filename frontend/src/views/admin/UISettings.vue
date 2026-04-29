@@ -185,11 +185,7 @@ function beforeBrowserLogoUpload(file) {
     ElMessage.warning('图片大小不能超过500KB')
     return false
   }
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    uiForm.value.browser_logo = e.target.result
-  }
-  reader.readAsDataURL(file)
+  uploadLogoFile(file, 'browser')
   return false
 }
 
@@ -198,12 +194,28 @@ function beforeLoginLogoUpload(file) {
     ElMessage.warning('图片大小不能超过2MB')
     return false
   }
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    uiForm.value.login_logo = e.target.result
-  }
-  reader.readAsDataURL(file)
+  uploadLogoFile(file, 'login')
   return false
+}
+
+async function uploadLogoFile(file, logoType) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('logo_type', logoType)
+  try {
+    const res = await axios.post('/api/admin/upload-logo/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    const url = res.data.url
+    if (logoType === 'browser') {
+      uiForm.value.browser_logo = url
+    } else {
+      uiForm.value.login_logo = url
+    }
+    ElMessage.success('上传成功')
+  } catch (e) {
+    ElMessage.error('上传失败')
+  }
 }
 
 onMounted(() => {

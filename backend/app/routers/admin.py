@@ -3,7 +3,7 @@
 """
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, File, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
@@ -285,13 +285,10 @@ def get_ui_settings(
         db.commit()
         db.refresh(setting)
     
-    # browser_logo / login_logo 不返回 base64 大字段，只返回 URL 或空
-    # 前端用 /api/admin/browser-logo/ 和 /api/admin/login-logo/ 获取实际图片
     return {
         "id": setting.id,
         "system_name": setting.system_name or "WB ERP",
-        "browser_logo_url": "/api/admin/browser-logo/",
-        "login_logo_url": "/api/admin/login-logo/",
+        "browser_logo": setting.browser_logo or "",
         "login_logo": setting.login_logo or "",
         "login_title": setting.login_title or "WB ERP",
         "login_subtitle": setting.login_subtitle or "",
@@ -306,11 +303,24 @@ def get_ui_settings(
 def get_browser_logo(db: Session = Depends(get_db)):
     """获取浏览器图标（返回实际图片，登录页 logo 用）"""
     result = db.execute(text("SELECT browser_logo FROM ui_settings LIMIT 1")).fetchone()
-    browser_logo = result[0] if result else None
-    if not browser_logo or browser_logo == "":
+    logo_val = result[0] if result else None
+    if not logo_val or logo_val == "":
+        return Response(content="", media_type="image/png")
+    # 如果是 URL 路径，走静态文件
+    if logo_val.startswith('/') or logo_val.startswith('http'):
+        import os
+        if logo_val.startswith('http'):
+            return Response(content="", media_type="image/png")
+        file_path = logo_val.lstrip('/')
+        full_path = "/opt/wb-erp/" + file_path
+        if os.path.exists(full_path):
+            with open(full_path, 'rb') as f:
+                data = f.read()
+            ext = file_path.split('.')[-1] if '.' in file_path else 'png'
+            return Response(content=data, media_type=f"image/{ext}")
         return Response(content="", media_type="image/png")
     import re, base64
-    match = re.search(r'data:image/(\w+);base64,(.+)', browser_logo)
+    match = re.search(r'data:image/(\w+);base64,(.+)', logo_val)
     if not match:
         return Response(content="", media_type="image/png")
     img_type = match.group(1)
@@ -322,16 +332,61 @@ def get_browser_logo(db: Session = Depends(get_db)):
 def get_login_logo(db: Session = Depends(get_db)):
     """获取登录页 logo 图片"""
     result = db.execute(text("SELECT login_logo FROM ui_settings LIMIT 1")).fetchone()
-    login_logo = result[0] if result else None
-    if not login_logo or login_logo == "":
+    logo_val = result[0] if result else None
+    if not logo_val or logo_val == "":
+        return Response(content="", media_type="image/png")
+    if logo_val.startswith('/') or logo_val.startswith('http'):
+        import os
+        if logo_val.startswith('http'):
+            return Response(content="", media_type="image/png")
+        file_path = logo_val.lstrip('/')
+        full_path = "/opt/wb-erp/" + file_path
+        if os.path.exists(full_path):
+            with open(full_path, 'rb') as f:
+                data = f.read()
+            ext = file_path.split('.')[-1] if '.' in file_path else 'png'
+            return Response(content=data, media_type=f"image/{ext}")
         return Response(content="", media_type="image/png")
     import re, base64
-    match = re.search(r'data:image/(\w+);base64,(.+)', login_logo)
+    match = re.search(r'data:image/(\w+);base64,(.+)', logo_val)
     if not match:
         return Response(content="", media_type="image/png")
     img_type = match.group(1)
     img_data = base64.b64decode(match.group(2))
     return Response(content=img_data, media_type=f"image/{img_type}")
+
+
+@router.post("/upload-logo/")
+async def upload_logo(
+    file: UploadFile = File(...),
+    logo_type: str = "browser",
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_admin)
+):
+    """上传 logo 图片，返回 URL 路径"""
+    import os, uuid
+    if file.content_type and not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="只能上传图片")
+    
+    static_dir = "/opt/wb-erp/static/logos"
+    os.makedirs(static_dir, exist_ok=True)
+    
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'png'
+    filename = f"{logo_type}-logo.{ext}"
+    filepath = os.path.join(static_dir, filename)
+    
+    with open(filepath, 'wb') as f:
+        content = await file.read()
+        f.write(content)
+    
+    logo_url = f"/static/logos/{filename}"
+    
+    # 更新数据库
+    field = "browser_logo" if logo_type == "browser" else "login_logo"
+    db.execute(text(f"UPDATE ui_settings SET {field} = :val WHERE id = 1"), {"val": logo_url})
+    db.commit()
+    
+    return {"url": logo_url}
 
 
 @router.put("/ui-settings/")
