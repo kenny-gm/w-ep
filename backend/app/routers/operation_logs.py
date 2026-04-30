@@ -172,14 +172,15 @@ def update_operation_log(
         log.action_type = data.action_type
     if data.effect is not None:
         log.effect = data.effect
-    if data.effect_analysis is not None:
+    if data.effect_analysis is not None and data.effect_analysis.strip():
         from datetime import datetime, timezone, timedelta
         shanghai_tz = timezone(timedelta(hours=8))
         timestamp = datetime.now(shanghai_tz).strftime('%Y-%m-%d %H:%M')
+        new_entry = "[" + timestamp + "] " + data.effect_analysis.strip()
         if log.effect_analysis:
-            log.effect_analysis = log.effect_analysis + " [" + timestamp + "] " + data.effect_analysis
+            log.effect_analysis = log.effect_analysis + "\n" + new_entry
         else:
-            log.effect_analysis = "[" + timestamp + "] " + data.effect_analysis
+            log.effect_analysis = new_entry
     
     db.commit()
     db.refresh(log)
