@@ -68,28 +68,28 @@ def convert_currency(amount: float, to_currency: str, exchange_rate: float) -> f
 
 
 def _add_data_info(db: Session, stats: DashboardStats) -> DashboardStats:
-    """为 stats 添加数据时间信息和延迟提示"""
+    """为 stats 添加数据时间信息和延迟提示（使用同步完成时间）"""
     from sqlalchemy import text
     try:
-        result = db.execute(text("SELECT MAX(record_date) FROM ad_records WHERE ad_type = 'advertising'")).fetchone()
-        raw_date = result[0] if result else None
+        sync_result = db.execute(text(
+            "SELECT finished_at FROM sync_logs WHERE sync_type='ads' AND status='success' ORDER BY finished_at DESC LIMIT 1"
+        )).fetchone()
         tz = timezone(timedelta(hours=8))
-        if raw_date:
-            # record_date may be string or datetime
-            if isinstance(raw_date, str):
-                dt = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S.%f")
-            else:
-                dt = raw_date
-            latest_ad_date = dt.replace(tzinfo=tz)
-            stats.data_updated_at = latest_ad_date.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
-            diff_hours = (datetime.now(tz) - latest_ad_date).total_seconds() / 3600
+        if sync_result and sync_result[0]:
+            sync_time = sync_result[0]
+            if isinstance(sync_time, str):
+                sync_time = datetime.strptime(sync_time, "%Y-%m-%d %H:%M:%S.%f")
+            if sync_time.tzinfo is None:
+                sync_time = sync_time.replace(tzinfo=tz)
+            stats.data_updated_at = sync_time.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
+            diff_hours = (datetime.now(tz) - sync_time).total_seconds() / 3600
             if diff_hours > 48:
-                stats.data_staleness = f"数据已延迟 {int(diff_hours)} 小时，最后同步于 {latest_ad_date.strftime('%m-%d %H:%M')}，请检查广告同步任务"
+                stats.data_staleness = f"数据已延迟 {int(diff_hours)} 小时，最后同步于 {sync_time.strftime('%m-%d %H:%M')}，请检查同步任务"
             elif diff_hours > 24:
-                stats.data_staleness = f"数据更新时间为 {latest_ad_date.strftime('%m-%d %H:%M')}，略有延迟"
+                stats.data_staleness = f"数据更新时间为 {sync_time.strftime('%m-%d %H:%M')}，略有延迟"
         else:
-            stats.data_updated_at = "暂无同步数据"
-            stats.data_staleness = "尚未从 WB API 同步广告数据，请检查同步任务"
+            stats.data_updated_at = "暂无同步记录"
+            stats.data_staleness = "尚未从 WB API 同步广告数据"
     except Exception as e:
         stats.data_updated_at = "未知"
     return stats
@@ -602,22 +602,27 @@ def get_dashboard_products(
         "ad_ratio": round(avg_ad_ratio - prev_ad_ratio, 2),
     }
     
-    # 数据时间信息
+    # 数据时间信息 - 使用同步完成时间（从sync_logs）
     try:
         from sqlalchemy import text
         tz = timezone(timedelta(hours=8))
-        result = db.execute(text("SELECT MAX(record_date) FROM ad_records WHERE ad_type = 'advertising'")).fetchone()
-        latest = result[0] if result else None
-        if latest:
-            latest = latest.replace(tzinfo=tz)
-            summary["data_updated_at"] = latest.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
-            diff = (datetime.now(tz) - latest).total_seconds() / 3600
+        # 查找最近一次成功的广告同步
+        sync_result = db.execute(text(
+            "SELECT finished_at FROM sync_logs WHERE sync_type='ads' AND status='success' ORDER BY finished_at DESC LIMIT 1"
+        )).fetchone()
+        if sync_result and sync_result[0]:
+            sync_time = sync_result[0]
+            if isinstance(sync_time, str):
+                sync_time = datetime.strptime(sync_time, "%Y-%m-%d %H:%M:%S.%f")
+            sync_time = sync_time.replace(tzinfo=tz) if sync_time.tzinfo is None else sync_time
+            diff = (datetime.now(tz) - sync_time).total_seconds() / 3600
+            summary["data_updated_at"] = sync_time.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
             if diff > 48:
-                summary["data_staleness"] = f"数据已延迟 {int(diff)} 小时，最后同步于 {latest.strftime('%m-%d %H:%M')}，请检查广告同步任务"
+                summary["data_staleness"] = f"数据已延迟 {int(diff)} 小时，最后同步于 {sync_time.strftime('%m-%d %H:%M')}，请检查同步任务"
             elif diff > 24:
-                summary["data_staleness"] = f"数据更新时间为 {latest.strftime('%m-%d %H:%M')}，略有延迟"
+                summary["data_staleness"] = f"数据更新时间为 {sync_time.strftime('%m-%d %H:%M')}，略有延迟"
         else:
-            summary["data_updated_at"] = "暂无同步数据"
+            summary["data_updated_at"] = "暂无同步记录"
             summary["data_staleness"] = "尚未从 WB API 同步广告数据"
     except:
         pass

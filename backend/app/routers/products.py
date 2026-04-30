@@ -789,22 +789,23 @@ def get_product_ads(
     from sqlalchemy import text
     try:
         tz = timezone(timedelta(hours=8))
-        result = db.execute(text("SELECT MAX(record_date) FROM ad_records WHERE ad_type = 'advertising'")).fetchone()
-        raw_date = result[0] if result else None
-        if raw_date:
-            if isinstance(raw_date, str):
-                dt = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S.%f")
-            else:
-                dt = raw_date
-            latest_dt = dt.replace(tzinfo=tz)
-            summary["data_updated_at"] = latest_dt.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
-            diff = (datetime.now(tz) - latest_dt).total_seconds() / 3600
+        sync_result = db.execute(text(
+            "SELECT finished_at FROM sync_logs WHERE sync_type='ads' AND status='success' ORDER BY finished_at DESC LIMIT 1"
+        )).fetchone()
+        if sync_result and sync_result[0]:
+            sync_time = sync_result[0]
+            if isinstance(sync_time, str):
+                sync_time = datetime.strptime(sync_time, "%Y-%m-%d %H:%M:%S.%f")
+            if sync_time.tzinfo is None:
+                sync_time = sync_time.replace(tzinfo=tz)
+            summary["data_updated_at"] = sync_time.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
+            diff = (datetime.now(tz) - sync_time).total_seconds() / 3600
             if diff > 48:
-                summary["data_staleness"] = f"数据已延迟 {int(diff)} 小时，最后同步于 {latest_dt.strftime('%m-%d %H:%M')}，请检查广告同步任务"
+                summary["data_staleness"] = f"数据已延迟 {int(diff)} 小时，最后同步于 {sync_time.strftime('%m-%d %H:%M')}，请检查同步任务"
             elif diff > 24:
-                summary["data_staleness"] = f"数据更新时间为 {latest_dt.strftime('%m-%d %H:%M')}，略有延迟"
+                summary["data_staleness"] = f"数据更新时间为 {sync_time.strftime('%m-%d %H:%M')}，略有延迟"
         else:
-            summary["data_updated_at"] = "暂无同步数据"
+            summary["data_updated_at"] = "暂无同步记录"
             summary["data_staleness"] = "尚未从 WB API 同步广告数据"
     except:
         pass
