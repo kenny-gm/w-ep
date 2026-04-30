@@ -24,18 +24,6 @@ const routes = [
         meta: { title: '销售看板' }
       },
       {
-        path: 'inventory',
-        name: 'Inventory',
-        component: () => import('../views/Inventory.vue'),
-        meta: { title: '库存管理' }
-      },
-      {
-        path: 'orders',
-        name: 'Orders',
-        component: () => import('../views/Orders.vue'),
-        meta: { title: '订单管理' }
-      },
-      {
         path: 'ads',
         name: 'Ads',
         component: () => import('../views/AdAnalysis.vue'),
@@ -48,28 +36,10 @@ const routes = [
         meta: { title: '关键词每日明细' }
       },
       {
-        path: 'finance',
-        name: 'Finance',
-        component: () => import('../views/Finance.vue'),
-        meta: { title: '利润分析' }
-      },
-      {
-        path: 'alerts',
-        name: 'Alerts',
-        component: () => import('../views/admin/Alerts.vue'),
-        meta: { title: '预警中心' }
-      },
-      {
         path: 'operation-logs',
         name: 'OperationLogs',
         component: () => import('../views/admin/OperationLogs.vue'),
         meta: { title: '运营日志' }
-      },
-      {
-        path: 'product-sales',
-        name: 'ProductSales',
-        component: () => import('../views/ProductSalesDemo.vue'),
-        meta: { title: '产品销售明细' }
       },
       // 后台管理路由
       {
@@ -125,6 +95,27 @@ const routes = [
             meta: { title: '预警阈值' }
           }
         ]
+      },
+      // 捕获已删除模块的访问，跳转看板
+      {
+        path: 'inventory',
+        redirect: '/dashboard'
+      },
+      {
+        path: 'orders',
+        redirect: '/dashboard'
+      },
+      {
+        path: 'finance',
+        redirect: '/dashboard'
+      },
+      {
+        path: 'alerts',
+        redirect: '/dashboard'
+      },
+      {
+        path: 'product-sales',
+        redirect: '/dashboard'
       }
     ]
   }
@@ -138,7 +129,7 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
-  
+
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
     next('/login')
   } else if (to.meta.requiresAdmin && !authStore.isAdmin) {
