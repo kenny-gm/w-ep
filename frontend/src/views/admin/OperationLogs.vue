@@ -30,7 +30,7 @@
         <el-table-column prop="date" label="日期" width="120" />
         <el-table-column prop="shop_name" label="店铺" width="120" />
         <el-table-column prop="product_name" label="产品" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="title" label="标题" min-width="150" />
+
         <el-table-column prop="action_type" label="操作类型" width="100">
           <template #default="{ row }">
             <el-tag size="small">{{ getActionTypeText(row.action_type) }}</el-tag>
