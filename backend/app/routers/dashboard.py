@@ -1,7 +1,7 @@
 """
 销售看板路由
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -69,18 +69,20 @@ def convert_currency(amount: float, to_currency: str, exchange_rate: float) -> f
 
 def _add_data_info(db: Session, stats: DashboardStats) -> DashboardStats:
     """为 stats 添加数据时间信息和延迟提示"""
-    from datetime import datetime, timezone, timedelta
     from sqlalchemy import text
     try:
-        # 最新广告数据时间
         result = db.execute(text("SELECT MAX(record_date) FROM ad_records WHERE ad_type = 'advertising'")).fetchone()
-        latest_ad_date = result[0] if result else None
-        if latest_ad_date:
-            latest_ad_date = latest_ad_date.replace(tzinfo=timezone(timedelta(hours=8)))
+        raw_date = result[0] if result else None
+        tz = timezone(timedelta(hours=8))
+        if raw_date:
+            # record_date may be string or datetime
+            if isinstance(raw_date, str):
+                dt = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S.%f")
+            else:
+                dt = raw_date
+            latest_ad_date = dt.replace(tzinfo=tz)
             stats.data_updated_at = latest_ad_date.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
-            # 计算延迟
-            now = datetime.now(timezone(timedelta(hours=8)))
-            diff_hours = (now - latest_ad_date).total_seconds() / 3600
+            diff_hours = (datetime.now(tz) - latest_ad_date).total_seconds() / 3600
             if diff_hours > 48:
                 stats.data_staleness = f"数据已延迟 {int(diff_hours)} 小时，最后同步于 {latest_ad_date.strftime('%m-%d %H:%M')}，请检查广告同步任务"
             elif diff_hours > 24:
@@ -602,14 +604,14 @@ def get_dashboard_products(
     
     # 数据时间信息
     try:
-        from datetime import datetime, timezone, timedelta
         from sqlalchemy import text
+        tz = timezone(timedelta(hours=8))
         result = db.execute(text("SELECT MAX(record_date) FROM ad_records WHERE ad_type = 'advertising'")).fetchone()
         latest = result[0] if result else None
         if latest:
-            latest = latest.replace(tzinfo=timezone(timedelta(hours=8)))
+            latest = latest.replace(tzinfo=tz)
             summary["data_updated_at"] = latest.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
-            diff = (datetime.now(timezone(timedelta(hours=8))) - latest).total_seconds() / 3600
+            diff = (datetime.now(tz) - latest).total_seconds() / 3600
             if diff > 48:
                 summary["data_staleness"] = f"数据已延迟 {int(diff)} 小时，最后同步于 {latest.strftime('%m-%d %H:%M')}，请检查广告同步任务"
             elif diff > 24:

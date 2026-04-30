@@ -1,7 +1,7 @@
 """
 产品管理路由
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Response
 from fastapi.responses import StreamingResponse
@@ -786,19 +786,23 @@ def get_product_ads(
         })
 
     # 数据时间信息
-    from datetime import datetime, timezone, timedelta
     from sqlalchemy import text
     try:
+        tz = timezone(timedelta(hours=8))
         result = db.execute(text("SELECT MAX(record_date) FROM ad_records WHERE ad_type = 'advertising'")).fetchone()
-        latest = result[0] if result else None
-        if latest:
-            latest = latest.replace(tzinfo=timezone(timedelta(hours=8)))
-            summary["data_updated_at"] = latest.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
-            diff = (datetime.now(timezone(timedelta(hours=8))) - latest).total_seconds() / 3600
+        raw_date = result[0] if result else None
+        if raw_date:
+            if isinstance(raw_date, str):
+                dt = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S.%f")
+            else:
+                dt = raw_date
+            latest_dt = dt.replace(tzinfo=tz)
+            summary["data_updated_at"] = latest_dt.strftime("%Y-%m-%d %H:%M") + " (北京时间)"
+            diff = (datetime.now(tz) - latest_dt).total_seconds() / 3600
             if diff > 48:
-                summary["data_staleness"] = f"数据已延迟 {int(diff)} 小时，最后同步于 {latest.strftime('%m-%d %H:%M')}，请检查广告同步任务"
+                summary["data_staleness"] = f"数据已延迟 {int(diff)} 小时，最后同步于 {latest_dt.strftime('%m-%d %H:%M')}，请检查广告同步任务"
             elif diff > 24:
-                summary["data_staleness"] = f"数据更新时间为 {latest.strftime('%m-%d %H:%M')}，略有延迟"
+                summary["data_staleness"] = f"数据更新时间为 {latest_dt.strftime('%m-%d %H:%M')}，略有延迟"
         else:
             summary["data_updated_at"] = "暂无同步数据"
             summary["data_staleness"] = "尚未从 WB API 同步广告数据"
