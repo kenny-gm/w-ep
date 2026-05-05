@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # ========== 应用配置 ==========
     APP_NAME: str = "WB ERP"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    DEBUG: bool = False
     
     # ========== 时区配置 ==========
     TIMEZONE: str = "Asia/Shanghai"
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     LOG_BACKUP_COUNT: int = 5
     
     class Config:
-        env_file = ".env.development"
+        env_file = ".env"
         case_sensitive = True
 
 
