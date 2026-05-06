@@ -156,6 +156,7 @@ def download_product_template(
     current_user = Depends(get_current_user)
 ):
     """下载所有产品的完整信息模板(xlsx)"""
+    import io
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
