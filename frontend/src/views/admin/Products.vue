@@ -314,7 +314,23 @@ async function syncProducts() {
 }
 
 function downloadTemplate() {
-  window.open('/api/products/import-template/', '_blank')
+  const token = localStorage.getItem('token') || localStorage.getItem('access_token') || ''
+  const url = '/api/products/import-template/'
+  fetch(url, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+    .then(r => r.blob())
+    .then(blob => {
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = 'products_template.csv'
+      a.click()
+      URL.revokeObjectURL(a.href)
+    })
+    .catch(() => {
+      const a = window.open('/api/products/import-template/', '_blank')
+      if (!a) ElMessage.error('下载失败，请允许弹出窗口')
+    })
 }
 
 function handleFileChange(file) {
