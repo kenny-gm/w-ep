@@ -160,6 +160,7 @@ def download_product_template(
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     from fastapi.responses import StreamingResponse
+    from sqlalchemy import text
 
     result = db.execute(text("""
         SELECT p.id, p.nm_id, p.sku, s.name as shop_name,
