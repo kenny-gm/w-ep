@@ -1015,16 +1015,27 @@ async function downloadAllAdData() {
   // 每日销售数据 sheet
   if (dailyData.value && dailyData.value.length > 0) {
     const salesRows = []
-    salesRows.push(['日期', '销售额', '访客数', '订单数', '加购数', '广告花费'])
+    salesRows.push(['日期', '销售额', '访客数', '订单数', '加购数', '广告花费', '加购率', '转化率', '广告占比'])
     const sortedDaily = [...dailyData.value].sort((a, b) => new Date(a.date) - new Date(b.date))
     for (const d of sortedDaily) {
+      const visitors = d.total_visitors || 0
+      const orders = d.orders || 0
+      const cart = d.add_to_cart || 0
+      const spend = d.ad_cost || d.spend || 0
+      const sales = d.sales || 0
+      const cartRate = visitors > 0 ? (cart / visitors * 100).toFixed(2) : '0.00'
+      const convRate = visitors > 0 ? (orders / visitors * 100).toFixed(2) : '0.00'
+      const adRatio = sales > 0 ? ((spend / sales) * 100).toFixed(2) : '0.00'
       salesRows.push([
         d.date || '',
         d.sales || 0,
-        d.total_visitors || 0,
-        d.orders || 0,
-        d.add_to_cart || 0,
-        d.ad_cost || d.spend || 0
+        visitors,
+        orders,
+        cart,
+        spend,
+        cartRate + '%',
+        convRate + '%',
+        adRatio + '%'
       ])
     }
     const wsSales = XLSX.utils.aoa_to_sheet(salesRows)
