@@ -717,6 +717,7 @@ def get_product_ads(
         cart_count = day_data.get("add_to_cart", 0) or 0
         if visitors > 0:
             sales_rub = sales_cny * exchange_rate
+            day_data["sales"] = sales_rub
             day_data["ad_ratio"] = round((ad_spend / sales_rub) * 100, 1) if sales_rub > 0 else 0
             day_data["cart_rate"] = round((cart_count / visitors) * 100, 1)
             day_data["conversion_rate"] = round((day_data.get("orders", 0) or 0) / visitors * 100, 2)
