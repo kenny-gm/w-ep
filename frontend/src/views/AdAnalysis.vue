@@ -983,7 +983,7 @@ async function downloadAllAdData() {
     if (hasCpcKw) {
       for (const k of cpcKeywordsData.value) {
         kwRows.push([
-          selectedProduct.value?.id || '', 'CPC搜索', k.keyword || '', k.views || 0, k.clicks || 0, k.spend || 0,
+          currentProduct.value?.nm_id || currentProduct.value?.id || '', 'CPC搜索', k.keyword || '', k.views || 0, k.clicks || 0, k.spend || 0,
           k.orders || 0, k.atbs || 0,
           (k.ctr || 0).toFixed(2) + '%',
           (k.cpc || 0).toFixed(2),
@@ -997,7 +997,7 @@ async function downloadAllAdData() {
     if (hasCpmKw) {
       for (const k of cpmKeywordsData.value) {
         kwRows.push([
-          selectedProduct.value?.id || '', 'CPM搜索', k.keyword || '', k.views || 0, k.clicks || 0, k.spend || 0,
+          currentProduct.value?.nm_id || currentProduct.value?.id || '', 'CPM搜索', k.keyword || '', k.views || 0, k.clicks || 0, k.spend || 0,
           k.orders || 0, k.atbs || 0,
           (k.ctr || 0).toFixed(2) + '%',
           (k.cpc || 0).toFixed(2),
