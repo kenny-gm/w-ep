@@ -703,6 +703,7 @@ def get_product_ads(
 
     # 获取店铺汇率用于计算广告占比
     shop = db.query(Shop).filter(Shop.id == product.shop_id).first()
+    shop_currency = shop.currency if shop and shop.currency else "RUB"
     exchange_rate = shop.exchange_rate if shop and shop.exchange_rate else 12.5
 
     import logging
@@ -711,12 +712,12 @@ def get_product_ads(
         first_day = list(daily_agg.values())[0]
         # 计算每日广告占比和加购率
     for date_key, day_data in daily_agg.items():
-        sales_cny = day_data.get("sales", 0) or 0
+        sales_val = day_data.get("sales", 0) or 0
         ad_spend = day_data.get("spend", 0) or 0
         visitors = day_data.get("total_visitors", 0) or 0
         cart_count = day_data.get("add_to_cart", 0) or 0
         if visitors > 0:
-            sales_rub = sales_cny * exchange_rate
+            sales_rub = sales_val * exchange_rate if shop_currency == "CNY" else sales_val
             day_data["sales"] = sales_rub
             day_data["ad_ratio"] = round((ad_spend / sales_rub) * 100, 1) if sales_rub > 0 else 0
             day_data["cart_rate"] = round((cart_count / visitors) * 100, 1)
