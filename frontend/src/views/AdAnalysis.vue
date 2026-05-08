@@ -1021,9 +1021,9 @@ async function downloadAllAdData() {
       salesRows.push([
         d.date || '',
         d.sales || 0,
-        d.visitors || 0,
+        d.total_visitors || 0,
         d.orders || 0,
-        d.cart || 0,
+        d.add_to_cart || 0,
         d.ad_cost || d.spend || 0
       ])
     }
