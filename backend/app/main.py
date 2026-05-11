@@ -20,9 +20,7 @@ from app.routers import alerts, operation_logs, effect_analysis
 from app.models.models import (
     User, Shop, Product, ProductPermission, InventoryRecord, InventorySnapshot,
     Order, OrderItem, AdRecord, SystemSetting, UISetting, MenuItem, SyncLog,
-    MetricHistory, OperationLog, Alert, AlertRule,
-    WayfairOrder, WayfairOrderItem, WayfairInventory, WayfairShipment,
-    WayfairCatalogProduct, WayfairSyncLog
+    MetricHistory, OperationLog, Alert, AlertRule
 )
 
 # 创建数据库表
