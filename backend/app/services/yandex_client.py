@@ -273,16 +273,18 @@ class YandexClient:
         for cid in campaign_ids:
             orders = self.get_orders(cid, date_from, date_to)
             for order in orders:
-                creation_date = order.get("creationDate", "")
-                date_str = creation_date[:10] if creation_date else date_from
-                order_id = str(order.get("id", ""))
-                is_fake = order.get("fake", False)
-                if is_fake:
-                    continue
-
                 order_status = str(order.get("status", "")).upper()
                 if any(b in order_status for b in ("CANCELLED", "REFUNDED", "RETURNED", "UNPAID", "CANCELED")):
                     continue
+
+                # 取付款时间作为日期桶（不用creationDate，避免后续状态变化导致日期漂移）
+                payments = order.get("payments", [])
+                payment = next((p for p in payments if p.get("type") == "PAYMENT"), None)
+                if not payment:
+                    continue  # 未付款的订单不计入
+
+                order_id = str(order.get("id", ""))
+                date_str = payment.get("date", "")[:10]  # ← 用付款时间归类
 
                 items = order.get("items", [])
                 for item in items:
@@ -359,19 +361,18 @@ class YandexClient:
         for cid in campaign_ids:
             orders = self.get_orders(cid, date_from, date_to)
             for order in orders:
-                creation_date = order.get("creationDate", "")
-                date_str = creation_date[:10] if creation_date else date_from
-                order_id = str(order.get("id", ""))
-                is_fake = order.get("fake", False)
-                currency = order.get("currency", "CNY")
-
-                if is_fake:
+                payments = order.get("payments", [])
+                payment = next((p for p in payments if p.get("type") == "PAYMENT"), None)
+                if not payment:
                     continue
 
-                # 过滤取消/退款/未支付状态订单
                 order_status = str(order.get("status", "")).upper()
                 if any(b in order_status for b in ("CANCELLED", "REFUNDED", "RETURNED", "UNPAID", "CANCELED")):
                     continue
+
+
+                order_id = str(order.get("id", ""))
+                date_str = payment.get("date", "")[:10]  # ← 用付款时间归类
 
                 items = order.get("items", [])
                 for item in items:
