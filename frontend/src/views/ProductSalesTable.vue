@@ -52,7 +52,8 @@
                 <td class="num" :class="getRateClass(row.cart_rate, 'cart_rate')">{{ row.cart_rate != null ? row.cart_rate + '%' : '-' }}</td>
                 <td class="num" :class="getRateClass(row.conversion_rate, 'conversion_rate')">{{ row.conversion_rate != null ? row.conversion_rate + '%' : '-' }}</td>
                 <td>
-                  <a v-if="row.nm_id" :href="'https://www.wildberries.ru/catalog/' + row.nm_id + '/detail.aspx'" target="_blank" class="product-link">{{ row.nm_id }}</a>
+                  <a v-if="row.nm_id && row.shop_platform === 'wildberries'" :href="'https://www.wildberries.ru/catalog/' + row.nm_id + '/detail.aspx'" target="_blank" class="product-link">{{ row.nm_id }}</a>
+                  <span v-else-if="row.nm_id" class="product-text">{{ row.nm_id }}</span>
                   <span v-else class="empty-cell">-</span>
                 </td>
                 <td>{{ row.sku || '-' }}</td>
@@ -785,6 +786,11 @@ async function prefetchLogsForDateRange() {
 
 .product-link:hover {
   text-decoration: underline;
+}
+
+.product-text {
+  color: #606266;
+  font-size: 12px;
 }
 
 .loading-mask {

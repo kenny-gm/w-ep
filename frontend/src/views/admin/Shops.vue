@@ -2,15 +2,21 @@
   <div class="admin-shops">
     <el-card>
       <template #header>
-        <el-button type="primary" @click="showCreateDialog = true">新增店铺</el-button>
+        <el-button type="primary" @click="openCreateDialog">新增店铺</el-button>
       </template>
-      
+
       <div class="table-scroll-wrapper">
       <el-table :data="shops" v-loading="loading" stripe style="min-width: 1100px;">
         <el-table-column prop="id" label="店铺ID" width="80" />
         <el-table-column prop="name" label="店铺名称" width="180" />
         <el-table-column prop="currency" label="货币" width="80" />
-        <el-table-column prop="platform" label="平台" width="100" />
+        <el-table-column prop="platform" label="平台" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.platform === 'yandex' ? 'warning' : 'primary'">
+              {{ row.platform === 'yandex' ? 'Yandex' : 'Wildberries' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="sync_enabled" label="自动同步" width="100">
           <template #default="{ row }">
             <el-tag :type="row.sync_enabled ? 'success' : 'info'">
@@ -47,49 +53,71 @@
       </el-table>
       </div>
     </el-card>
-    
+
     <!-- 创建/编辑店铺对话框 -->
-    <el-dialog v-model="showCreateDialog" :title="editMode ? '编辑店铺' : '新增店铺'" width="500px">
-      <el-form :model="shopForm" :rules="shopRules" ref="shopFormRef" label-width="100px">
+    <el-dialog v-model="showCreateDialog" :title="editMode ? '编辑店铺' : '新增店铺'" width="540px">
+      <el-form :model="shopForm" :rules="shopRules" ref="shopFormRef" label-width="110px">
         <el-form-item label="店铺名称" prop="name">
-          <el-input v-model="shopForm.name" />
+          <el-input v-model="shopForm.name" :placeholder="editMode ? '留空使用 Yandex 店铺名' : '输入店铺名称'" />
         </el-form-item>
-        
+
         <el-form-item label="平台" prop="platform">
-          <el-select v-model="shopForm.platform" style="width: 100%">
+          <el-select v-model="shopForm.platform" style="width: 100%" @change="onPlatformChange" :disabled="editMode">
             <el-option label="Wildberries" value="wildberries" />
             <el-option label="Yandex" value="yandex" />
           </el-select>
         </el-form-item>
-        
+
         <el-form-item label="API Token" prop="api_token">
-          <el-input v-model="shopForm.api_token" type="textarea" rows="3" :placeholder="editMode ? '已保存，如需修改请输入新值' : '从 Wildberries 卖家后台获取'" />
-          <span v-if="editMode && currentShop?.has_token" style="font-size: 12px; color: #909399; margin-top: 4px; display: block">当前Token: {{ currentShop?.api_token }}</span>
+          <el-input
+            v-model="shopForm.api_token"
+            type="textarea"
+            rows="3"
+            :placeholder="editMode ? '已保存，如需修改请输入新值' : '请输入 API Token'"
+          />
+          <span v-if="editMode && currentShop?.has_token" style="font-size: 12px; color: #909399; margin-top: 4px; display: block">
+            当前Token: {{ currentShop.api_token }}
+          </span>
         </el-form-item>
-        
-        <el-form-item label="货币类型" prop="currency">
-          <el-select v-model="shopForm.currency" style="width: 100%">
-            <el-option label="卢布 (RUB)" value="RUB" />
-            <el-option label="人民币 (CNY)" value="CNY" />
-          </el-select>
-        </el-form-item>
-        
+
+        <template v-if="shopForm.platform === 'yandex'">
+          <el-alert type="info" :closable="false" style="margin-bottom: 12px">
+            保存时将自动从 Yandex API 获取 business 和 campaign 信息，
+            无需手动填写。
+          </el-alert>
+
+          <el-form-item label="货币类型">
+            <el-select v-model="shopForm.currency" style="width: 100%">
+              <el-option label="人民币 (CNY)" value="CNY" />
+            </el-select>
+          </el-form-item>
+        </template>
+
+        <template v-else>
+          <el-form-item label="货币类型">
+            <el-select v-model="shopForm.currency" style="width: 100%">
+              <el-option label="卢布 (RUB)" value="RUB" />
+              <el-option label="人民币 (CNY)" value="CNY" />
+            </el-select>
+          </el-form-item>
+        </template>
+
         <el-form-item label="自动同步">
           <el-switch v-model="shopForm.sync_enabled" />
         </el-form-item>
-        
+
         <el-form-item label="同步间隔">
           <el-input-number v-model="shopForm.sync_interval_hours" :min="1" :max="168" />
           <span style="margin-left: 10px">小时</span>
         </el-form-item>
       </el-form>
-      
+
       <template #footer>
         <el-button @click="showCreateDialog = false">取消</el-button>
         <el-button type="primary" @click="saveShop">保存</el-button>
       </template>
     </el-dialog>
-    
+
     <!-- 同步进度对话框 -->
     <el-dialog v-model="showSyncDialog" title="同步数据" width="500px">
       <div v-if="syncing">
@@ -101,14 +129,17 @@
           ⚠️ 新店铺检测，已自动同步90天历史数据
         </p>
         <div v-if="syncResult?.results">
-          <p><strong>产品:</strong> {{ syncResult.results.products?.count || 0 }} 新增, {{ syncResult.results.products?.updated || 0 }} 更新</p>
-          <p><strong>订单:</strong> {{ syncResult.results.orders?.count || 0 }} 新增, {{ syncResult.results.orders?.updated || 0 }} 更新</p>
-          <p><strong>库存:</strong> {{ syncResult.results.inventory?.count || 0 }} 条</p>
-          <p><strong>广告:</strong> {{ syncResult.results.ads?.count || 0 }} 新增, {{ syncResult.results.ads?.updated || 0 }} 更新</p>
+          <p v-for="(val, key) in syncResult.results" :key="key">
+            <strong>{{ key }}:</strong>
+            <template v-if="val && typeof val === 'object'">
+              {{ val.count ?? val.message ?? '' }}
+            </template>
+            <template v-else>{{ val }}</template>
+          </p>
         </div>
       </div>
     </el-dialog>
-    
+
     <!-- 同步日志对话框 -->
     <el-dialog v-model="showLogsDialog" title="同步日志" width="700px">
       <el-table :data="syncLogs" v-loading="logsLoading" stripe>
@@ -179,7 +210,6 @@ const shopRules = {
 function formatDate(dateStr) {
   if (!dateStr) return '-'
   const date = new Date(dateStr)
-  // 格式化为北京时间 UTC+8
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -187,6 +217,29 @@ function formatDate(dateStr) {
   const minutes = String(date.getMinutes()).padStart(2, '0')
   const seconds = String(date.getSeconds()).padStart(2, '0')
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} (UTC+8)`
+}
+
+function onPlatformChange(platform) {
+  if (platform === 'yandex') {
+    shopForm.currency = 'CNY'
+  } else {
+    shopForm.currency = 'RUB'
+  }
+}
+
+function openCreateDialog() {
+  editMode.value = false
+  currentShop.value = null
+  Object.assign(shopForm, {
+    id: null,
+    name: '',
+    api_token: '',
+    platform: 'wildberries',
+    currency: 'RUB',
+    sync_enabled: true,
+    sync_interval_hours: 24
+  })
+  showCreateDialog.value = true
 }
 
 async function fetchShops() {
@@ -207,7 +260,7 @@ function editShop(shop) {
   Object.assign(shopForm, {
     id: shop.id,
     name: shop.name,
-    api_token: '', // 不回显 token
+    api_token: '',
     platform: shop.platform || 'wildberries',
     currency: shop.currency,
     sync_enabled: shop.sync_enabled,
@@ -222,24 +275,26 @@ async function saveShop() {
     return
   }
   try {
+    const payload = {
+      name: shopForm.name,
+      platform: shopForm.platform,
+      currency: shopForm.currency,
+      sync_enabled: shopForm.sync_enabled,
+      sync_interval_hours: shopForm.sync_interval_hours
+    }
+    if (shopForm.api_token) {
+      payload.api_token = shopForm.api_token
+    }
+
     if (editMode.value) {
-      const updateData = {
-        name: shopForm.name,
-        platform: shopForm.platform,
-        currency: shopForm.currency,
-        sync_enabled: shopForm.sync_enabled,
-        sync_interval_hours: shopForm.sync_interval_hours
-      }
-      if (shopForm.api_token) {
-        updateData.api_token = shopForm.api_token
-      }
-      await axios.put(`/api/shops/${shopForm.id}//`, updateData)
+      await axios.put(`/api/shops/${shopForm.id}/`, payload)
       ElMessage.success('更新成功')
     } else {
-      await axios.post('/api/shops/', shopForm)
-      ElMessage.success('创建成功')
+      const response = await axios.post('/api/shops/', payload)
+      const data = Array.isArray(response.data) ? response.data : [response.data]
+      ElMessage.success(`${data.length} 个店铺已创建/更新`)
     }
-    
+
     showCreateDialog.value = false
     fetchShops()
   } catch (error) {
@@ -251,9 +306,9 @@ async function testConnection(shop) {
   try {
     const response = await axios.post(`/api/shops/${shop.id}/test-connection/`)
     if (response.data.success) {
-      ElMessage.success('连接成功')
+      ElMessage.success(response.data.message || '连接成功')
     } else {
-      ElMessage.error(response.data.message)
+      ElMessage.error(response.data.message || '连接失败')
     }
   } catch (error) {
     ElMessage.error('连接测试失败')
@@ -279,16 +334,16 @@ async function syncData(shop) {
   syncing.value = true
   syncProgress.value = 0
   syncResult.value = null
-  
+
   try {
-    syncStatus.value = '正在同步产品...'
+    syncStatus.value = '正在同步...'
     syncProgress.value = 25
     const response = await axios.post(`/api/shops/${shop.id}/sync/?sync_type=all`)
-    
+
     syncProgress.value = 100
     syncStatus.value = '同步完成'
     syncResult.value = response.data
-    
+
     fetchShops()
   } catch (error) {
     ElMessage.error('同步失败')
@@ -300,7 +355,7 @@ async function syncData(shop) {
 
 async function deleteShop(shop) {
   await ElMessageBox.confirm(`确定删除店铺 ${shop.name}？`, '确认删除', { type: 'warning' })
-  
+
   try {
     await axios.delete(`/api/shops/${shop.id}/`)
     ElMessage.success('删除成功')
@@ -338,12 +393,12 @@ onMounted(() => {
   .admin-shops {
     padding: 12px;
   }
-  
+
   .table-scroll-wrapper {
     margin: 0 -12px;
     padding: 0 12px;
   }
-  
+
   .el-dialog {
     width: 95% !important;
     margin: 10px auto;

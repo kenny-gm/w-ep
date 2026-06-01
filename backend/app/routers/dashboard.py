@@ -2,7 +2,7 @@
 销售看板路由
 """
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -52,7 +52,19 @@ def get_shop_exchange_rates(db: Session) -> dict:
     sys_setting = db.execute(text("SELECT value FROM system_settings WHERE `key` = 'cny_to_rub'")).fetchone()
     cny_to_rub = float(sys_setting[0]) if sys_setting and sys_setting[0] else 12.5
     shops = db.query(Shop).filter(Shop.is_active == True).all()
-    return {shop.id: {"currency": shop.currency or "RUB", "rate": cny_to_rub} for shop in shops}
+    return {shop.id: {"currency": shop.currency or "RUB", "rate": cny_to_rub, "platform": shop.platform} for shop in shops}
+
+
+def get_sales_currency(shop: "Shop") -> str:
+    """销售金额币种（所有平台统一用 shop.currency）"""
+    return shop.currency or "RUB"
+
+
+def get_ad_cost_currency(shop: "Shop") -> str:
+    """广告费币种：Yandex 用 CNY，WB 用 RUB"""
+    if shop.platform == "yandex":
+        return "CNY"
+    return "RUB"
 
 
 def convert_currency(amount: float, to_currency: str, exchange_rate: float) -> float:
@@ -110,7 +122,7 @@ def get_dashboard_stats(
 ):
     """获取销售看板数据"""
     # 默认显示昨天
-    yesterday = datetime.now() - timedelta(days=1)
+    yesterday = (datetime.now() - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     
     if filter_data.start_date:
         start_date = datetime.strptime(filter_data.start_date, "%Y-%m-%d")
@@ -194,13 +206,14 @@ def get_dashboard_stats(
         ads_costs = ads_cost_query.all()
 
         for ad in ads:
-            sales_val = convert_currency(ad.sales or 0, shop_config["currency"], shop_config["rate"])
+            ad_shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5})
+            sales_val = convert_currency(ad.sales or 0, ad_shop_cfg["currency"], ad_shop_cfg["rate"])
             stats.sales_amount += sales_val
             stats.visitors += ad.visitors or 0
             stats.add_to_cart += ad.cart_count or 0
             stats.order_count += ad.order_count or 0
         
-        # 广告费用
+        # 广告费用（WB 广告费是 RUB，无需转换）
         for ad in ads_costs:
             stats.ad_cost += ad.cost or 0
     else:
@@ -301,7 +314,8 @@ def get_dashboard_stats(
             prev_ads = prev_ads_query.all()
             prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0}
             for ad in prev_ads:
-                prev_stats["sales_amount"] += convert_currency(ad.sales or 0, shop_config["currency"], shop_config["rate"])
+                ad_shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5})
+                prev_stats["sales_amount"] += convert_currency(ad.sales or 0, ad_shop_cfg["currency"], ad_shop_cfg["rate"])
                 prev_stats["visitors"] += ad.visitors or 0
                 prev_stats["add_to_cart"] += ad.cart_count or 0
                 prev_stats["order_count"] += ad.order_count or 0
@@ -316,24 +330,18 @@ def get_dashboard_stats(
         )
         if has_shop_filter:
             prev_ads_query = prev_ads_query.filter(AdRecord.shop_id.in_(filter_data.shop_ids))
-        
+
         prev_ads = prev_ads_query.all()
         prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0}
-        
-        # 从orders表获取上一周期销售额
-        prev_orders_query = db.query(Order).filter(
-            Order.order_date >= prev_start,
-            Order.order_date < prev_end
-        )
-        if has_shop_filter:
-            prev_orders_query = prev_orders_query.filter(Order.shop_id.in_(filter_data.shop_ids))
-        prev_orders = prev_orders_query.all()
-        
+
+
         for order in prev_orders:
-            order_shop_config = shop_rates.get(order.shop_id, {"currency": "RUB", "rate": 12.5})
-            prev_stats["sales_amount"] += convert_currency(order.total_amount, order_shop_config["currency"], order_shop_config["rate"])
-        
+            order_shop_cfg = shop_rates.get(order.shop_id, {"currency": "RUB", "rate": 12.5})
+            prev_stats["sales_amount"] += convert_currency(order.total_amount, order_shop_cfg["currency"], order_shop_cfg["rate"])
+
         for ad in prev_ads:
+            ad_shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5})
+            prev_stats["sales_amount"] += convert_currency(ad.sales or 0, ad_shop_cfg["currency"], ad_shop_cfg["rate"])
             prev_stats["visitors"] += ad.visitors or 0
             prev_stats["add_to_cart"] += ad.cart_count or 0
             prev_stats["order_count"] += ad.order_count or 0
@@ -390,7 +398,7 @@ def get_dashboard_products(
     """获取产品销售列表（按产品分组的销售数据，含汇总和环比）"""
     from app.models.models import Product, AdRecord
     
-    yesterday = datetime.now() - timedelta(days=1)
+    yesterday = (datetime.now() - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     
     if filter_data.start_date:
         start_date = datetime.strptime(filter_data.start_date, "%Y-%m-%d")
@@ -463,13 +471,17 @@ def get_dashboard_products(
         AdRecord.ad_type == "advertising",
         AdRecord.product_id.in_(product_ids),
     ).all()
-    
-    ad_costs = {}
+
+    # 广告费用（WB 广告费是 RUB，直接累加）
+    # {shop_id: {product_id: cost_rub}}
+    ad_costs_by_shop: Dict[int, Dict[int, float]] = {}
     for ad in current_ads_costs:
-        if ad.product_id not in ad_costs:
-            ad_costs[ad.product_id] = 0
-        ad_costs[ad.product_id] += ad.cost or 0
-    
+        if ad.shop_id not in ad_costs_by_shop:
+            ad_costs_by_shop[ad.shop_id] = {}
+        ad_costs_by_shop[ad.shop_id][ad.product_id] = (
+            ad_costs_by_shop[ad.shop_id].get(ad.product_id, 0) + (ad.cost or 0)
+        )
+
     # 获取上一周期 product_analytics 数据
     prev_ads = db.query(AdRecord).filter(
         AdRecord.record_date >= prev_start,
@@ -477,7 +489,7 @@ def get_dashboard_products(
         AdRecord.ad_type == "product_analytics",
         AdRecord.product_id.in_(product_ids)
     ).all()
-    
+
     prev_stats = {}
     for ad in prev_ads:
         if ad.product_id not in prev_stats:
@@ -486,21 +498,23 @@ def get_dashboard_products(
         prev_stats[ad.product_id]["visitors"] += ad.visitors or 0
         prev_stats[ad.product_id]["cart"] += ad.cart_count or 0
         prev_stats[ad.product_id]["orders"] += ad.order_count or 0
-    
-    # 获取上一周期广告费用
+
+    # 获取上一周期广告费用（同样转换）
     prev_ads_costs = db.query(AdRecord).filter(
         AdRecord.record_date >= prev_start,
         AdRecord.record_date < prev_end,
         AdRecord.ad_type == "advertising",
         AdRecord.product_id.in_(product_ids),
     ).all()
-    
-    prev_ad_costs = {}
+
+    prev_ad_costs_by_shop: Dict[int, Dict[int, float]] = {}
     for ad in prev_ads_costs:
-        if ad.product_id not in prev_ad_costs:
-            prev_ad_costs[ad.product_id] = 0
-        prev_ad_costs[ad.product_id] += ad.cost or 0
-    
+        if ad.shop_id not in prev_ad_costs_by_shop:
+            prev_ad_costs_by_shop[ad.shop_id] = {}
+        prev_ad_costs_by_shop[ad.shop_id][ad.product_id] = (
+            prev_ad_costs_by_shop[ad.shop_id].get(ad.product_id, 0) + (ad.cost or 0)
+        )
+
     # 构建返回数据
     items = []
     total_sales = 0
@@ -530,15 +544,32 @@ def get_dashboard_products(
         # 计算产品级别的比率
         cart_rate = round(pdata["cart"] / pdata["visitors"] * 100, 2) if pdata["visitors"] > 0 else 0
         conversion_rate = round(pdata["orders"] / pdata["visitors"] * 100, 2) if pdata["visitors"] > 0 else 0
-        ad_ratio = round(ad_costs.get(product.id, 0) / sales * 100, 2) if sales > 0 else 0
-        
+        # 计算产品级别的广告费（跨 shop 合计，RUB）
+        total_ad_cost_prod = 0
+        total_prev_ad_cost_prod = 0
+        for sid, pid_dict in ad_costs_by_shop.items():
+            total_ad_cost_prod += pid_dict.get(product.id, 0)
+        for sid, pid_dict in prev_ad_costs_by_shop.items():
+            total_prev_ad_cost_prod += pid_dict.get(product.id, 0)
+
+        ad_ratio = round(total_ad_cost_prod / sales * 100, 2) if sales > 0 else 0
+
+        # 获取店铺信息
+        from app.models.models import Shop as ShopModel
+        shop_obj = shops_map.get(product.shop_id)
+        shop_platform = shop_obj.platform if shop_obj else ""
+        shop_currency = shop_obj.currency if shop_obj else "RUB"
+
         items.append({
             "product_id": product.id,
             "nm_id": product.nm_id,
             "sku": product.sku,
             "product_name": product.custom_name or product.name,
             "shop_id": product.shop_id,
-            "shop_name": shops_map.get(product.shop_id, Shop()).name if shops_map.get(product.shop_id) else "",
+            "shop_name": shop_obj.name if shop_obj else "",
+            "shop_platform": shop_platform,
+            "shop_currency": shop_currency,
+            "display_currency": "RUB",
             "owner": product.owner or "",
             "sales": sales,
             "visitors": pdata["visitors"],
@@ -546,25 +577,25 @@ def get_dashboard_products(
             "cart_rate": cart_rate,
             "orders": pdata["orders"],
             "conversion_rate": conversion_rate,
-            "ad_cost": ad_costs.get(product.id, 0),
+            "ad_cost": total_ad_cost_prod,
             "ad_ratio": ad_ratio,
             "prev_sales": prev_sales,
             "prev_visitors": prev_data["visitors"],
             "prev_cart": prev_data["cart"],
             "prev_orders": prev_data["orders"],
-            "prev_ad_cost": prev_ad_costs.get(product.id, 0),
+            "prev_ad_cost": total_prev_ad_cost_prod,
         })
         
         total_sales += sales
         total_visitors += pdata["visitors"]
         total_cart += pdata["cart"]
         total_orders += pdata["orders"]
-        total_ad_cost += ad_costs.get(product.id, 0)
+        total_ad_cost += total_ad_cost_prod
         total_prev_sales += prev_sales
         total_prev_visitors += prev_data["visitors"]
         total_prev_cart += prev_data["cart"]
         total_prev_orders += prev_data["orders"]
-        total_prev_ad_cost += prev_ad_costs.get(product.id, 0)
+        total_prev_ad_cost += total_prev_ad_cost_prod
     
     # 计算比率
     def calc_cart_rate(cart, visitors):
@@ -694,14 +725,14 @@ def get_sales_trend(
         if date_str not in daily_data:
             daily_data[date_str] = {"sales": 0, "visitors": 0, "cart": 0, "orders": 0, "ad_cost": 0}
         
-        shop_config = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5})
-        sales_val = convert_currency(ad.sales or 0, shop_config["currency"], shop_config["rate"])
+        shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5, "platform": ""})
+        sales_val = convert_currency(ad.sales or 0, shop_cfg["currency"], shop_cfg["rate"])
         daily_data[date_str]["sales"] += sales_val
         daily_data[date_str]["visitors"] += ad.visitors or 0
         daily_data[date_str]["cart"] += ad.cart_count or 0
         daily_data[date_str]["orders"] += ad.order_count or 0
     
-    # 从广告数据获取广告费用
+    # 从广告数据获取广告费用（卢布，无需转换）
     for ad in ads_costs:
         date_str = ad.record_date.strftime("%Y-%m-%d") if ad.record_date else "unknown"
         if date_str not in daily_data:
@@ -781,16 +812,7 @@ def get_stats_for_period(db: Session, start_date: datetime, end_date: datetime, 
     stats["visitors"] = sum(ad.visitors or 0 for ad in ads)
     stats["add_to_cart"] = sum(ad.cart_count or 0 for ad in ads)
     
-    # 广告费用（从advertising表）
-    ads_cost_query = db.query(AdRecord).filter(
-        AdRecord.record_date >= start_date,
-        AdRecord.record_date <= end_date,
-        AdRecord.ad_type == "advertising",
-    )
-    if shop_ids:
-        ads_cost_query = ads_cost_query.filter(AdRecord.shop_id.in_(shop_ids))
-    
-    ads_costs = ads_cost_query.all()
+    # 广告费用（来自 ad_records 表，卢布，无需转换）
     stats["ad_cost"] = sum(ad.cost or 0 for ad in ads_costs)
     
     if stats["visitors"] > 0:
@@ -897,11 +919,14 @@ def get_stats_by_owner(
         ).all()
         
         for ad in ad_records:
-            shop_config = shop_rates.get(product.shop_id, {"currency": "RUB", "rate": 12.5})
-            owner_stats[owner]["sales"] += convert_currency(ad.sales or 0, shop_config["currency"], shop_config["rate"])
+            ad_shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5, "platform": ""})
+            # sales 转换
+            owner_stats[owner]["sales"] += convert_currency(
+                ad.sales or 0, ad_shop_cfg["currency"], ad_shop_cfg["rate"]
+            )
+            owner_stats[owner]["ad_cost"] += ad.cost or 0
             owner_stats[owner]["orders"] += ad.order_count or 0
             owner_stats[owner]["visitors"] += ad.visitors or 0
             owner_stats[owner]["add_to_cart"] += ad.cart_count or 0
-            owner_stats[owner]["ad_cost"] += ad.cost or 0
     
     return list(owner_stats.values())

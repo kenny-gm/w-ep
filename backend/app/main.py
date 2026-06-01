@@ -10,6 +10,10 @@ from starlette.requests import Request
 from app.config import settings
 from app.database import engine, Base
 
+# 迁移：确保 platform_config 列存在
+from app.init_db import migrate_add_platform_config
+migrate_add_platform_config()
+
 # 导入路由
 from app.routers import auth, dashboard, products, shops, admin, users, inventory, orders, ads, finance, profit
 from app.routers import metric_thresholds

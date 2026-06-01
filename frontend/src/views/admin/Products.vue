@@ -149,11 +149,6 @@
     <!-- 导入对话框 -->
     <el-dialog v-model="showImportDialog" title="批量导入" width="500px">
       <el-form label-width="100px">
-        <el-form-item label="选择店铺">
-          <el-select v-model="importShopId" placeholder="请选择店铺" style="width: 100%">
-            <el-option v-for="shop in shops" :key="shop.id" :label="shop.name" :value="shop.id" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="上传文件">
           <el-upload
             :auto-upload="false"
@@ -193,7 +188,6 @@ const showSyncDialog = ref(false)
 const showImportDialog = ref(false)
 const editDialogVisible = ref(false)
 const syncShopId = ref(null)
-const importShopId = ref(null)
 const importFile = ref(null)
 
 const editForm = reactive({
@@ -338,10 +332,6 @@ function handleFileChange(file) {
 }
 
 async function handleImport() {
-  if (!importShopId.value) {
-    ElMessage.warning('请选择店铺')
-    return
-  }
   if (!importFile.value) {
     ElMessage.warning('请选择文件')
     return
@@ -350,7 +340,6 @@ async function handleImport() {
   try {
     const formData = new FormData()
     formData.append('file', importFile.value)
-    formData.append('shop_id', importShopId.value)
     await axios.post('/api/products/import/', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
@@ -358,7 +347,8 @@ async function handleImport() {
     showImportDialog.value = false
     fetchProducts()
   } catch (error) {
-    ElMessage.error('导入失败')
+    const msg = error?.response?.data?.detail || error?.response?.data?.message || '导入失败'
+    ElMessage.error(msg)
   } finally {
     importing.value = false
   }

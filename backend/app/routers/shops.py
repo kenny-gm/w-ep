@@ -20,8 +20,9 @@ router = APIRouter(prefix="/api/shops", tags=["店铺管理"])
 
 class ShopCreate(BaseModel):
     name: str
-    api_token: Optional[str] = None  # 允许为空，后续再配置
+    api_token: Optional[str] = None
     platform: str = "wildberries"
+    platform_config: Optional[dict] = None
     currency: str = "RUB"
     sync_interval_hours: int = 24
 
@@ -30,6 +31,7 @@ class ShopUpdate(BaseModel):
     name: Optional[str] = None
     api_token: Optional[str] = None
     platform: Optional[str] = None
+    platform_config: Optional[dict] = None
     currency: Optional[str] = None
     sync_enabled: Optional[bool] = None
     sync_interval_hours: Optional[int] = None
@@ -49,6 +51,7 @@ class ShopResponse(BaseModel):
     id: int
     name: str
     platform: str = "wildberries"
+    platform_config: dict = {}
     currency: str
     exchange_rate: float
     sync_enabled: bool
@@ -66,69 +69,22 @@ class ShopResponse(BaseModel):
     delivery_per_liter_currency: str = "RUB"
     warehouse_fee_tiers: list = []
     warehouse_fee_currency: str = "RUB"
-    
+    has_token: bool = False
+
     class Config:
         from_attributes = True
 
 
-# ========== 路由 ==========
-
-@router.get("/")
-def list_shops(
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """获取店铺列表"""
-    shops = db.query(Shop).filter(Shop.is_active == True).all()
-    
-    # 转换时间为格式化字符串
-    result = []
-    for shop in shops:
-        result.append({
-            "id": shop.id,
-            "name": shop.name,
-            "platform": shop.platform,
-            "currency": shop.currency,
-            "api_token": "***" + shop.api_token[-5:] if shop.api_token else "",
-            "has_token": bool(shop.api_token),
-            "sync_enabled": shop.sync_enabled,
-            "sync_interval_hours": shop.sync_interval_hours,
-            "last_sync_at": shop.last_sync_at.strftime("%Y-%m-%d %H:%M:%S") if shop.last_sync_at else None,
-            "is_active": shop.is_active,
-            "created_at": shop.created_at.strftime("%Y-%m-%d %H:%M:%S") if shop.created_at else None,
-        "vat_rate": shop.vat_rate,
-            "withdrawal_fee": shop.withdrawal_fee,
-            "warehouse_factor": shop.warehouse_factor,
-            "localization_index": shop.localization_index,
-            "delivery_first_liter": shop.delivery_first_liter,
-            "delivery_first_liter_currency": shop.delivery_first_liter_currency,
-            "delivery_per_liter": shop.delivery_per_liter,
-            "delivery_per_liter_currency": shop.delivery_per_liter_currency,
-            "warehouse_fee_tiers": shop.warehouse_fee_tiers or [],
-            "warehouse_fee_currency": shop.warehouse_fee_currency or "RUB",
-        })
-    
-    return result
-
-
-@router.get("/{shop_id}/")
-def get_shop(
-    shop_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """获取单个店铺详情"""
-    shop = db.query(Shop).filter(Shop.id == shop_id, Shop.is_active == True).first()
-    if not shop:
-        raise HTTPException(status_code=404, detail="店铺不存在")
-    
+def _shop_to_dict(shop: Shop, include_token: bool = False) -> dict:
+    """将 Shop 模型转换为响应字典"""
     return {
         "id": shop.id,
         "name": shop.name,
-            "platform": shop.platform,
+        "platform": shop.platform,
+        "platform_config": shop.platform_config or {},
         "currency": shop.currency,
-        "api_token": "***" + shop.api_token[-5:] if shop.api_token else "",  # 显示后5位
-        "has_token": bool(shop.api_token),  # 是否有Token
+        "api_token": "***" + shop.api_token[-5:] if shop.api_token and include_token else ("***" if shop.api_token else ""),
+        "has_token": bool(shop.api_token),
         "sync_enabled": shop.sync_enabled,
         "sync_interval_hours": shop.sync_interval_hours,
         "last_sync_at": shop.last_sync_at.strftime("%Y-%m-%d %H:%M:%S") if shop.last_sync_at else None,
@@ -142,9 +98,34 @@ def get_shop(
         "delivery_first_liter_currency": shop.delivery_first_liter_currency,
         "delivery_per_liter": shop.delivery_per_liter,
         "delivery_per_liter_currency": shop.delivery_per_liter_currency,
-            "warehouse_fee_tiers": shop.warehouse_fee_tiers or [],
-            "warehouse_fee_currency": shop.warehouse_fee_currency or "RUB",
+        "warehouse_fee_tiers": shop.warehouse_fee_tiers or [],
+        "warehouse_fee_currency": shop.warehouse_fee_currency or "RUB",
     }
+
+
+# ========== 路由 ==========
+
+@router.get("/")
+def list_shops(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """获取店铺列表"""
+    shops = db.query(Shop).filter(Shop.is_active == True).all()
+    return [_shop_to_dict(shop) for shop in shops]
+
+
+@router.get("/{shop_id}/")
+def get_shop(
+    shop_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """获取单个店铺详情"""
+    shop = db.query(Shop).filter(Shop.id == shop_id, Shop.is_active == True).first()
+    if not shop:
+        raise HTTPException(status_code=404, detail="店铺不存在")
+    return _shop_to_dict(shop)
 
 
 @router.post("/")
@@ -153,42 +134,92 @@ def create_shop(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_admin)
 ):
-    """创建店铺"""
+    """创建店铺
+
+    Yandex：自动调用 get_campaigns() 按 businessId 分组，
+    为每个 businessId 创建或更新一个 business-level Yandex Shop。
+    不按 campaignId 拆分为多个店铺。
+    """
+    if data.platform == "yandex":
+        from app.services.yandex_client import YandexClient
+        if not data.api_token:
+            raise HTTPException(status_code=400, detail="Yandex 店铺需要 API Token")
+
+        try:
+            client = YandexClient(data.api_token)
+            businesses = client.get_campaigns()
+        except Exception as e:
+            err_msg = str(e)
+            if "401" in err_msg or "Unauthorized" in err_msg:
+                raise HTTPException(status_code=401, detail="Token 无效或已过期，请重新获取")
+            if "403" in err_msg or "Forbidden" in err_msg:
+                raise HTTPException(status_code=403, detail="Token 无权限访问 Yandex API，请确认已在 Yandex Partner Market 授权")
+            raise HTTPException(status_code=502, detail=f"Yandex API 调用失败: {e}")
+
+        if not businesses:
+            raise HTTPException(status_code=400, detail="未找到任何 Yandex Business，请确认 Token 正确且已开通接口权限")
+
+        results = []
+        for biz_id, biz_info in businesses.items():
+            # 查找是否已存在同一 businessId 的 Yandex shop
+            existing_shops = db.query(Shop).filter(
+                Shop.platform == "yandex",
+                Shop.is_active == True
+            ).all()
+            existing = next(
+                (s for s in existing_shops
+                 if (s.platform_config or {}).get("business_id") == biz_id),
+                None
+            )
+
+            campaign_ids = [c["campaign_id"] for c in biz_info["campaigns"] if c["campaign_id"]]
+            platform_config = {
+                "business_id": biz_id,
+                "business_name": biz_info["business_name"],
+                "campaign_ids": campaign_ids,
+                "campaigns": biz_info["campaigns"],
+            }
+
+            if existing:
+                # 更新已有 business-level shop
+                existing.name = data.name or biz_info["business_name"] or f"Yandex Business {biz_id}"
+                existing.currency = data.currency or "CNY"
+                existing.platform_config = platform_config
+                db.commit()
+                db.refresh(existing)
+                results.append(_shop_to_dict(existing))
+            else:
+                shop = Shop(
+                    name=data.name or biz_info["business_name"] or f"Yandex Business {biz_id}",
+                    api_token=data.api_token or "",
+                    platform="yandex",
+                    platform_config=platform_config,
+                    currency=data.currency or "CNY",
+                    sync_interval_hours=data.sync_interval_hours,
+                )
+                db.add(shop)
+                results.append(shop)
+
+        db.commit()
+        for r in results:
+            if hasattr(r, "id"):
+                db.refresh(r)
+        return [(_shop_to_dict(r) if hasattr(r, "__dict__") else r) for r in results]
+
+    # Wildberries / 其他平台
     shop = Shop(
         name=data.name,
-        api_token=data.api_token,
+        api_token=data.api_token or "",
+        platform=data.platform,
+        platform_config=data.platform_config or {},
         currency=data.currency,
         sync_interval_hours=data.sync_interval_hours
     )
-    
+
     db.add(shop)
     db.commit()
     db.refresh(shop)
-    
-    # 返回格式化后的数据
-    return {
-        "id": shop.id,
-        "name": shop.name,
-            "platform": shop.platform,
-        "currency": shop.currency,
-        "api_token": "***" + shop.api_token[-5:] if shop.api_token else "",
-        "has_token": bool(shop.api_token),
-        "sync_enabled": shop.sync_enabled,
-        "sync_interval_hours": shop.sync_interval_hours,
-        "last_sync_at": shop.last_sync_at.strftime("%Y-%m-%d %H:%M:%S") if shop.last_sync_at else None,
-        "is_active": shop.is_active,
-        "created_at": shop.created_at.strftime("%Y-%m-%d %H:%M:%S") if shop.created_at else None,
-        "vat_rate": shop.vat_rate,
-        "withdrawal_fee": shop.withdrawal_fee,
-        "warehouse_factor": shop.warehouse_factor,
-        "localization_index": shop.localization_index,
-        "delivery_first_liter": shop.delivery_first_liter,
-        "delivery_first_liter_currency": shop.delivery_first_liter_currency,
-        "delivery_per_liter": shop.delivery_per_liter,
-            "delivery_per_liter_currency": shop.delivery_per_liter_currency,
-            "warehouse_fee_tiers": shop.warehouse_fee_tiers or [],
-            "warehouse_fee_currency": shop.warehouse_fee_currency or "RUB",
-    }
+    return _shop_to_dict(shop)
 
 
 @router.put("/{shop_id}/")
@@ -202,38 +233,14 @@ def update_shop(
     shop = db.query(Shop).filter(Shop.id == shop_id).first()
     if not shop:
         raise HTTPException(status_code=404, detail="店铺不存在")
-    
+
     update_data = data.dict(exclude_unset=True)
     for key, value in update_data.items():
         setattr(shop, key, value)
-    
+
     db.commit()
     db.refresh(shop)
-    
-    # 返回格式化后的数据
-    return {
-        "id": shop.id,
-        "name": shop.name,
-            "platform": shop.platform,
-        "currency": shop.currency,
-        "api_token": "***" + shop.api_token[-5:] if shop.api_token else "",
-        "has_token": bool(shop.api_token),
-        "sync_enabled": shop.sync_enabled,
-        "sync_interval_hours": shop.sync_interval_hours,
-        "last_sync_at": shop.last_sync_at.strftime("%Y-%m-%d %H:%M:%S") if shop.last_sync_at else None,
-        "is_active": shop.is_active,
-        "created_at": shop.created_at.strftime("%Y-%m-%d %H:%M:%S") if shop.created_at else None,
-            "vat_rate": shop.vat_rate,
-            "withdrawal_fee": shop.withdrawal_fee,
-            "warehouse_factor": shop.warehouse_factor,
-            "localization_index": shop.localization_index,
-            "delivery_first_liter": shop.delivery_first_liter,
-            "delivery_first_liter_currency": shop.delivery_first_liter_currency,
-            "delivery_per_liter": shop.delivery_per_liter,
-            "delivery_per_liter_currency": shop.delivery_per_liter_currency,
-            "warehouse_fee_tiers": shop.warehouse_fee_tiers or [],
-            "warehouse_fee_currency": shop.warehouse_fee_currency or "RUB",
-    }
+    return _shop_to_dict(shop)
 
 
 @router.delete("/{shop_id}/")
@@ -246,10 +253,9 @@ def delete_shop(
     shop = db.query(Shop).filter(Shop.id == shop_id).first()
     if not shop:
         raise HTTPException(status_code=404, detail="店铺不存在")
-    
+
     shop.is_active = False
     db.commit()
-    
     return {"message": "店铺已删除"}
 
 
@@ -263,120 +269,93 @@ def test_connection(
     shop = db.query(Shop).filter(Shop.id == shop_id).first()
     if not shop:
         raise HTTPException(status_code=404, detail="店铺不存在")
-    
-    from app.services.wb_api import WBAPIClient
-    client = WBAPIClient(shop.api_token)
-    
-    # 测试连接
-    if client.ping():
-        return {"success": True, "message": "连接成功"}
+
+    if shop.platform == "yandex":
+        from app.services.yandex_client import YandexClient
+        client = YandexClient(shop.api_token)
+        if client.test_connection():
+            return {"success": True, "message": "Yandex API 连接成功"}
+        else:
+            return {"success": False, "message": "Yandex API 连接失败，请检查 Token"}
     else:
-        return {"success": False, "message": "连接失败，请检查 API Token"}
+        from app.services.wb_api import WBAPIClient
+        client = WBAPIClient(shop.api_token)
+        if client.ping():
+            return {"success": True, "message": "Wildberries API 连接成功"}
+        else:
+            return {"success": False, "message": "Wildberries API 连接失败，请检查 API Token"}
 
 
 @router.post("/{shop_id}/sync/")
 def sync_shop_data(
     shop_id: int,
-    sync_type: str = "all",  # products/orders/inventory/ads/all
-    history: bool = False,   # 是否同步历史数据
+    sync_type: str = "all",
+    history: bool = False,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_admin)
 ):
-    """手动同步数据（需要管理员认证）
-    
-    Args:
-        shop_id: 店铺ID
-        sync_type: 同步类型 (products/orders/inventory/ads/all)
-        history: 是否同步历史数据（新店铺自动检测）
-    """
-    return sync_shop_data_internal(shop_id, sync_type, history, db)
+    """手动同步数据（需要管理员认证）"""
+    return _sync_shop_data_internal(shop_id, sync_type, history, db)
 
 
-def sync_shop_data_internal(
+def _sync_shop_data_internal(
     shop_id: int,
     sync_type: str = "all",
     history: bool = False,
     db: Session = Depends(get_db)
 ):
-    """内部同步数据（使用API密钥，无需用户认证）"""
+    """内部同步数据"""
     import logging
     logger = logging.getLogger(__name__)
-    
-    # 验证内部API密钥
-    from fastapi import Header
-    
-    logger.info(f"========== [INTERNAL] 开始同步店铺 {shop_id} ==========")
-    
-    shop = db.query(Shop).filter(Shop.id == shop_id).first()
-    if not shop:
-        logger.error(f"店铺 {shop_id} 不存在")
-        raise HTTPException(status_code=404, detail="店铺不存在")
-    import logging
-    logger = logging.getLogger(__name__)
-    
+
     logger.info(f"========== 开始同步店铺 {shop_id} ==========")
-    
+
     shop = db.query(Shop).filter(Shop.id == shop_id).first()
     if not shop:
         logger.error(f"店铺 {shop_id} 不存在")
         raise HTTPException(status_code=404, detail="店铺不存在")
-    
-    logger.info(f"店铺信息: {shop.name}, API Token: {shop.api_token[:10]}...")
-    
+
+    logger.info(f"店铺信息: {shop.name}, platform={shop.platform}")
+
     sync_service = SyncService(db, shop)
-    
-    # 自动检测新店铺
+
     is_new = shop.last_sync_at is None
     if is_new:
         logger.info("检测到新店铺，将同步历史数据")
-        history = True  # 新店铺自动同步历史数据
-    
+        history = True
+
     logger.info(f"同步类型: {sync_type}, 历史数据: {history}")
-    
+
     results = {}
-    
+
     try:
         if sync_type == "products":
-            logger.info("开始同步产品数据...")
             results["products"] = sync_service.sync_products(overwrite=True)
-            logger.info(f"产品同步完成: {results['products']}")
         elif sync_type == "orders":
-            logger.info("开始同步订单数据...")
             results["orders"] = sync_service.sync_orders()
-            logger.info(f"订单同步完成: {results['orders']}")
         elif sync_type == "inventory":
-            logger.info("开始同步库存数据...")
             results["inventory"] = sync_service.sync_inventory()
-            logger.info(f"库存同步完成: {results['inventory']}")
         elif sync_type == "ads":
-            logger.info("开始同步广告数据...")
             results["ads"] = sync_service.sync_ads(days=7)
-            logger.info(f"广告同步完成: {results['ads']}")
         elif sync_type == "keywords":
-            logger.info("开始同步关键词数据...")
             results["keywords"] = sync_service.sync_keywords(days=30)
-            logger.info(f"关键词同步完成: {results['keywords']}")
         elif sync_type == "product_sales":
-            logger.info("开始同步产品销售漏斗数据...")
             results["product_sales"] = sync_service.sync_product_sales(days=30 if history else 7)
-            logger.info(f"产品销售漏斗同步完成: {results['product_sales']}")
-
         elif sync_type == "all":
-            logger.info("开始全量同步...")
             results = sync_service.sync_all(history=history)
-            logger.info(f"全量同步完成: {results}")
     except Exception as e:
         logger.error(f"同步失败: {str(e)}", exc_info=True)
         return {
             "is_new_shop": is_new,
+            "success": False,
             "error": str(e),
             "results": results
         }
-    
+
     logger.info(f"========== 同步店铺 {shop_id} 完成 ==========")
-    
     return {
         "is_new_shop": is_new,
+        "success": True,
         "results": results
     }
 
@@ -392,7 +371,6 @@ def get_sync_logs(
     logs = db.query(SyncLog).filter(
         SyncLog.shop_id == shop_id
     ).order_by(SyncLog.started_at.desc()).limit(limit).all()
-    
     return logs
 
 
@@ -404,33 +382,28 @@ def get_shop_products(
 ):
     """获取店铺的产品列表"""
     from app.models.models import Product
-    
-    # 验证店铺是否存在
+
     shop = db.query(Shop).filter(Shop.id == shop_id, Shop.is_active == True).first()
     if not shop:
         raise HTTPException(status_code=404, detail="店铺不存在")
-    
-    # 获取该店铺的所有产品
+
     query = db.query(Product).filter(Product.shop_id == shop_id)
-    
-    # 根据当前用户的 allowed_owners 进行过滤
+
     user_allowed_owners = getattr(current_user, 'allowed_owners', None) or []
     if user_allowed_owners:
         query = query.filter(Product.owner.in_(user_allowed_owners))
-    
+
     products = query.all()
-    
-    result = []
-    for p in products:
-        result.append({
+    return [
+        {
             "id": p.id,
             "nm_id": p.nm_id,
             "sku": p.sku,
             "name": p.custom_name or p.name or p.sku,
             "shop_id": p.shop_id
-        })
-    
-    return result
+        }
+        for p in products
+    ]
 
 
 @router.get("/{shop_id}/traffic-source/")
@@ -445,29 +418,24 @@ def get_traffic_source(
     from app.models.models import Product, Order, AdRecord
     from app.services.wb_api import WBAPIClient
     from datetime import timedelta
-    
-    # 验证店铺
+
     shop = db.query(Shop).filter(Shop.id == shop_id, Shop.is_active == True).first()
     if not shop:
         raise HTTPException(status_code=404, detail="店铺不存在")
-    
-    # 默认时间范围
+
     if not date_to:
         date_to = datetime.now().strftime("%Y-%m-%d")
     if not date_from:
         date_from = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-    
-    # 尝试从API获取广告数据
+
     ad_clicks = 0
     ad_impressions = 0
     ad_spend = 0
-    
-    if shop.api_token:
+
+    if shop.api_token and shop.platform == "wildberries":
         try:
             client = WBAPIClient(shop.api_token)
             adverts = client.get_adverts()
-            
-            # 尝试获取统计数据
             ad_ids = [ad.get("id") for ad in adverts if ad.get("id")]
             if ad_ids:
                 try:
@@ -481,8 +449,7 @@ def get_traffic_source(
                     print(f"获取广告统计失败: {e}")
         except Exception as e:
             print(f"获取广告列表失败: {e}")
-    
-    # 从数据库获取订单数据估算自然流量
+
     try:
         orders = db.query(Order).filter(
             Order.shop_id == shop_id,
@@ -492,19 +459,13 @@ def get_traffic_source(
         total_orders = len(orders)
     except:
         total_orders = 0
-    
-    # 估算流量
-    # 假设：每100次广告点击带来约1个订单，转化率1%
-    # 自然流量订单 = 总订单 - 广告订单
-    # 假设广告订单占比约30%
+
     ad_orders = int(ad_clicks * 0.01) if ad_clicks > 0 else int(total_orders * 0.3)
     natural_orders = max(0, total_orders - ad_orders)
-    
-    # 估算访客数（假设转化率）
-    ad_visitors = ad_clicks  # 广告点击作为广告访客
-    natural_visitors = natural_orders * 100  # 假设1%转化率
+    ad_visitors = ad_clicks
+    natural_visitors = natural_orders * 100
     total_visitors = ad_visitors + natural_visitors
-    
+
     if total_visitors > 0:
         ad_ratio = round(ad_visitors / total_visitors * 100, 1)
         natural_ratio = round(natural_visitors / total_visitors * 100, 1)
@@ -513,7 +474,7 @@ def get_traffic_source(
         ad_ratio = 25.0
         natural_ratio = 73.0
         other_ratio = 2.0
-    
+
     return {
         "date_from": date_from,
         "date_to": date_to,
@@ -536,6 +497,7 @@ def get_traffic_source(
 # ========== 内部同步端点（使用API密钥）==========
 INTERNAL_API_KEY = "wb-erp-internal-sync-key-2026"
 
+
 @router.post("/internal-sync/{shop_id}/")
 def internal_sync_shop_data(
     shop_id: int,
@@ -544,78 +506,11 @@ def internal_sync_shop_data(
     api_key: str = None,
     db: Session = Depends(get_db)
 ):
-    """内部同步数据（服务器端定时任务使用）
-    
-    使用 X-Internal-Key header 或 api_key query parameter
-    """
+    """内部同步数据（服务器端定时任务使用）"""
     import logging
     logger = logging.getLogger(__name__)
-    
-    # 验证API密钥
+
     if api_key != INTERNAL_API_KEY:
         raise HTTPException(status_code=401, detail="无效的API密钥")
-    
-    logger.info(f"========== [INTERNAL-SYNC] 开始同步店铺 {shop_id} ==========")
-    
-    shop = db.query(Shop).filter(Shop.id == shop_id).first()
-    if not shop:
-        logger.error(f"店铺 {shop_id} 不存在")
-        raise HTTPException(status_code=404, detail="店铺不存在")
-    
-    logger.info(f"店铺信息: {shop.name}, API Token: {shop.api_token[:10]}...")
-    
-    sync_service = SyncService(db, shop)
-    
-    # 自动检测新店铺
-    is_new = shop.last_sync_at is None
-    if is_new:
-        logger.info("检测到新店铺，将同步历史数据")
-        history = True
-    
-    logger.info(f"同步类型: {sync_type}, 历史数据: {history}")
-    
-    results = {}
-    
-    try:
-        if sync_type == "products":
-            logger.info("开始同步产品数据...")
-            results["products"] = sync_service.sync_products(overwrite=True)
-            logger.info(f"产品同步完成: {results['products']}")
-        elif sync_type == "orders":
-            logger.info("开始同步订单数据...")
-            results["orders"] = sync_service.sync_orders()
-            logger.info(f"订单同步完成: {results['orders']}")
-        elif sync_type == "inventory":
-            logger.info("开始同步库存数据...")
-            results["inventory"] = sync_service.sync_inventory()
-            logger.info(f"库存同步完成: {results['inventory']}")
-        elif sync_type == "ads":
-            logger.info("开始同步广告数据...")
-            results["ads"] = sync_service.sync_ads(days=7)
-            logger.info(f"广告同步完成: {results['ads']}")
-        elif sync_type == "keywords":
-            logger.info("开始同步关键词数据...")
-            results["keywords"] = sync_service.sync_keywords(days=30)
-            logger.info(f"关键词同步完成: {results['keywords']}")
-        elif sync_type == "product_sales":
-            logger.info("开始同步产品销售漏斗数据...")
-            results["product_sales"] = sync_service.sync_product_sales(days=30 if history else 7)
-            logger.info(f"产品销售漏斗同步完成: {results['product_sales']}")
-        elif sync_type == "all":
-            logger.info("开始全量同步...")
-            results = sync_service.sync_all(history=history)
-            logger.info(f"全量同步完成: {results}")
-    except Exception as e:
-        logger.error(f"同步失败: {str(e)}", exc_info=True)
-        return {
-            "is_new_shop": is_new,
-            "success": False,
-            "error": str(e),
-            "results": results
-        }
-    
-    return {
-        "is_new_shop": is_new,
-        "success": True,
-        "results": results
-    }
+
+    return _sync_shop_data_internal(shop_id, sync_type, history, db)

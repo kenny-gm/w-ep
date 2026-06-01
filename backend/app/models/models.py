@@ -50,6 +50,7 @@ class Shop(Base):
     name = Column(String(100), nullable=False)
     api_token = Column(String(500), nullable=False)
     platform = Column(String(20), default="wildberries")  # wildberries/yandex
+    platform_config = Column(JSON, default=dict)  # Yandex: {business_id, campaign_id}
     currency = Column(String(10), default="RUB")  # RUB/CNY
     exchange_rate = Column(Float, default=12.5)  # 汇率 (CNY/RUB)
     sync_enabled = Column(Boolean, default=True)

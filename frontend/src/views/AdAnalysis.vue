@@ -919,10 +919,37 @@ async function downloadAllAdData() {
   const shopName = currentShop.value?.name || '全店铺'
   const productName = currentProduct.value?.name || currentProduct.value?.sku || '产品'
 
+  // 获取当前产品的 nm_id
+  const productNmId = currentProduct.value?.nm_id || ''
+
+  // 构建 nm_id + date → 日志内容 的映射
+  const logMap = {}
+  try {
+    const logResp = await axios.get('/api/operation-logs/', {
+      params: { start_date: dateFrom, end_date: dateTo, limit: 500 }
+    })
+    const logs = logResp.data || []
+    logs.forEach(log => {
+      if (log.nm_id) {
+        const key = `${log.nm_id}_${log.date}`
+        if (!logMap[key]) {
+          logMap[key] = log.title ? `${log.title}: ${log.detail || ''}` : (log.detail || '')
+        } else {
+          // 多条日志用换行合并
+          const existing = logMap[key]
+          const newEntry = log.title ? `${log.title}: ${log.detail || ''}` : (log.detail || '')
+          logMap[key] = existing + '\n' + newEntry
+        }
+      }
+    })
+  } catch (e) {
+    console.warn('获取日志失败:', e)
+  }
+
   const rows = []
 
-  // 表头
-  rows.push(['产品ID', '广告类型', '时间', '曝光', '访客', '花费', '订单', '购物车', '加购率', 'CTR', '转化', 'CPM', 'CPC'])
+  // 表头（加一列日志内容）
+  rows.push(['产品ID', '广告类型', '时间', '曝光', '访客', '花费', '订单', '购物车', '加购率', 'CTR', '转化', 'CPM', 'CPC', '日志内容'])
 
   // CPM推荐
   for (const r of cpmRecommendationsData.value) {
@@ -936,7 +963,9 @@ async function downloadAllAdData() {
     const conversion = visitors > 0 ? (orders / visitors * 100).toFixed(2) : '0.00'
     const cpm = impressions > 0 ? (cost / impressions * 1000).toFixed(2) : '0.00'
     const cpc = visitors > 0 ? (cost / visitors).toFixed(2) : '0.00'
-    rows.push([currentProduct.value?.nm_id || currentProduct.value?.id || '', 'CPM推荐', r.record_date, impressions, visitors, cost, orders, cart, cartRate + '%', ctr.toFixed(2) + '%', conversion + '%', cpm, cpc])
+    const logKey = `${productNmId}_${r.record_date}`
+    const logContent = logMap[logKey] || ''
+    rows.push([currentProduct.value?.nm_id || currentProduct.value?.id || '', 'CPM推荐', r.record_date, impressions, visitors, cost, orders, cart, cartRate + '%', ctr.toFixed(2) + '%', conversion + '%', cpm, cpc, logContent])
   }
 
   // CPM搜索
@@ -951,7 +980,9 @@ async function downloadAllAdData() {
     const conversion = visitors > 0 ? (orders / visitors * 100).toFixed(2) : '0.00'
     const cpm = impressions > 0 ? (cost / impressions * 1000).toFixed(2) : '0.00'
     const cpc = visitors > 0 ? (cost / visitors).toFixed(2) : '0.00'
-    rows.push([currentProduct.value?.nm_id || currentProduct.value?.id || '', 'CPM搜索', r.record_date, impressions, visitors, cost, orders, cart, cartRate + '%', ctr.toFixed(2) + '%', conversion + '%', cpm, cpc])
+    const logKey2 = `${productNmId}_${r.record_date}`
+    const logContent2 = logMap[logKey2] || ''
+    rows.push([currentProduct.value?.nm_id || currentProduct.value?.id || '', 'CPM搜索', r.record_date, impressions, visitors, cost, orders, cart, cartRate + '%', ctr.toFixed(2) + '%', conversion + '%', cpm, cpc, logContent2])
   }
 
   // CPC搜索
@@ -966,7 +997,9 @@ async function downloadAllAdData() {
     const conversion = visitors > 0 ? (orders / visitors * 100).toFixed(2) : '0.00'
     const cpm = impressions > 0 ? (cost / impressions * 1000).toFixed(2) : '0.00'
     const cpc = visitors > 0 ? (cost / visitors).toFixed(2) : '0.00'
-    rows.push([currentProduct.value?.nm_id || currentProduct.value?.id || '', 'CPC搜索', r.record_date, impressions, visitors, cost, orders, cart, cartRate + '%', ctr.toFixed(2) + '%', conversion + '%', cpm, cpc])
+    const logKey3 = `${productNmId}_${r.record_date}`
+    const logContent3 = logMap[logKey3] || ''
+    rows.push([currentProduct.value?.nm_id || currentProduct.value?.id || '', 'CPC搜索', r.record_date, impressions, visitors, cost, orders, cart, cartRate + '%', ctr.toFixed(2) + '%', conversion + '%', cpm, cpc, logContent3])
   }
 
   // 生成Excel并下载
@@ -1015,7 +1048,7 @@ async function downloadAllAdData() {
   // 每日销售数据 sheet
   if (dailyData.value && dailyData.value.length > 0) {
     const salesRows = []
-    salesRows.push(['日期', '销售额', '访客数', '订单数', '加购数', '广告花费', '加购率', '转化率', '广告占比'])
+    salesRows.push(['日期', '销售额', '访客数', '订单数', '加购数', '广告花费', '加购率', '转化率', '广告占比', '日志内容'])
     const sortedDaily = [...dailyData.value].sort((a, b) => new Date(a.date) - new Date(b.date))
     for (const d of sortedDaily) {
       const visitors = d.total_visitors || 0
@@ -1026,6 +1059,8 @@ async function downloadAllAdData() {
       const cartRate = visitors > 0 ? (cart / visitors * 100).toFixed(2) : '0.00'
       const convRate = visitors > 0 ? (orders / visitors * 100).toFixed(2) : '0.00'
       const adRatio = sales > 0 ? ((spend / sales) * 100).toFixed(2) : '0.00'
+      const salesLogKey = `${productNmId}_${d.date}`
+      const salesLogContent = logMap[salesLogKey] || ''
       salesRows.push([
         d.date || '',
         d.sales || 0,
@@ -1035,7 +1070,8 @@ async function downloadAllAdData() {
         spend,
         cartRate + '%',
         convRate + '%',
-        adRatio + '%'
+        adRatio + '%',
+        salesLogContent
       ])
     }
     const wsSales = XLSX.utils.aoa_to_sheet(salesRows)

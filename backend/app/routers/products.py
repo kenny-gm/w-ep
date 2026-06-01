@@ -228,42 +228,102 @@ def download_product_template(
 
 @router.post("/import/")
 async def import_products(file: UploadFile = File(...), db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """批量导入产品信息"""
-    import io, csv
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="仅支持CSV文件")
-    content = await file.read()
-    try:
-        decoded = content.decode("utf-8-sig")
-    except:
-        decoded = content.decode("gbk")
-    reader = csv.DictReader(io.StringIO(decoded))
-    imported = 0
-    errors = []
-    for i, row in enumerate(reader, 2):
+    """批量导入产品信息（支持 xlsx 和 csv）"""
+    import io
+    if file.filename.endswith(".xlsx"):
+        from openpyxl import load_workbook
+        content = await file.read()
+        wb = load_workbook(io.BytesIO(content), data_only=True)
+        ws = wb.active
+        headers = [str(cell.value).strip() if cell.value else "" for cell in ws[1]]
+        imported = 0
+        errors = []
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            try:
+                row_dict = dict(zip(headers, row))
+                nm_id_val = row_dict.get("NM_ID", "") or row_dict.get("nm_id", "") or ""
+                nm_id = str(nm_id_val).strip()
+                if not nm_id or nm_id == "None":
+                    errors.append(f"第{row_idx}行: nm_id为空")
+                    continue
+                # Try ID first, then nm_id
+                product = None
+                db_id = row_dict.get("ID", "")
+                if db_id and str(db_id) != "None":
+                    product = db.query(Product).filter(Product.id == int(db_id)).first()
+                if not product:
+                    product = db.query(Product).filter(Product.nm_id == nm_id).first()
+                if not product:
+                    errors.append(f"第{row_idx}行: 产品{nm_id}不存在")
+                    continue
+                col_map = {
+                    "custom_name": "自定义名称",
+                    "owner": "负责人",
+                    "weight": "重量(kg)",
+                    "length": "长度(cm)",
+                    "width": "宽度(cm)",
+                    "height": "高度(cm)",
+                    "purchase_price": "采购价(CNY)",
+                    "shipping_price": "头程单价(CNY)",
+                }
+                for field, col in col_map.items():
+                    raw_val = row_dict.get(col, "")
+                    if raw_val is not None and str(raw_val) not in ("", "None"):
+                        try:
+                            if field in ["weight", "length", "width", "height", "purchase_price", "shipping_price"]:
+                                setattr(product, field, float(str(raw_val).strip()))
+                            else:
+                                setattr(product, field, str(raw_val).strip())
+                        except:
+                            pass
+                        try:
+                            if field in ["weight", "length", "width", "height", "purchase_price", "shipping_price"]:
+                                setattr(product, field, float(str(raw_val).strip()))
+                            else:
+                                setattr(product, field, str(raw_val).strip())
+                        except:
+                            pass
+                db.commit()
+                imported += 1
+            except Exception as e:
+                errors.append(f"第{row_idx}行: {str(e)}")
+        return {"message": f"成功导入{imported}条记录", "errors": errors[:20]}
+    elif file.filename.endswith(".csv"):
+        import csv as csv_mod
+        content = await file.read()
         try:
-            nm_id = row.get("nm_id", "").strip()
-            if not nm_id:
-                errors.append("第" + str(i) + "行: nm_id不能为空")
-                continue
-            product = db.query(Product).filter(Product.nm_id == nm_id).first()
-            if not product:
-                errors.append("第" + str(i) + "行: 产品" + nm_id + "不存在")
-                continue
-            for field in ["custom_name", "owner", "weight", "length", "width", "height", "purchase_price", "shipping_price"]:
-                if field in row and row[field]:
-                    try:
-                        if field in ["weight", "length", "width", "height", "purchase_price", "shipping_price"]:
-                            setattr(product, field, float(row[field]))
-                        else:
-                            setattr(product, field, row[field])
-                    except:
-                        pass
-            db.commit()
-            imported += 1
-        except Exception as e:
-            errors.append("第" + str(i) + "行: " + str(e))
-    return {"message": "成功导入" + str(imported) + "条记录", "errors": errors[:20]}
+            decoded = content.decode("utf-8-sig")
+        except:
+            decoded = content.decode("gbk")
+        reader = csv_mod.DictReader(io.StringIO(decoded))
+        imported = 0
+        errors = []
+        for i, row in enumerate(reader, 2):
+            try:
+                nm_id = row.get("nm_id", "").strip()
+                if not nm_id:
+                    errors.append(f"第{i}行: nm_id不能为空")
+                    continue
+                product = db.query(Product).filter(Product.nm_id == nm_id).first()
+                if not product:
+                    errors.append(f"第{i}行: 产品{nm_id}不存在")
+                    continue
+                for field in ["custom_name", "owner", "weight", "length", "width", "height", "purchase_price", "shipping_price"]:
+                    if field in row and row[field]:
+                        try:
+                            if field in ["weight", "length", "width", "height", "purchase_price", "shipping_price"]:
+                                setattr(product, field, float(row[field]))
+                            else:
+                                setattr(product, field, row[field])
+                        except:
+                            pass
+                db.commit()
+                imported += 1
+            except Exception as e:
+                errors.append(f"第{i}行: {str(e)}")
+        return {"message": f"成功导入{imported}条记录", "errors": errors[:20]}
+    else:
+        raise HTTPException(status_code=400, detail="仅支持 xlsx 或 csv 文件")
 
 
 @router.get("/{product_id}/", response_model=ProductResponse)
