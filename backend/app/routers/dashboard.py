@@ -351,10 +351,7 @@ def get_dashboard_stats(
         prev_ads = prev_ads_query.all()
         prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0}
 
-
-        for order in prev_orders:
-            order_shop_cfg = shop_rates.get(order.shop_id, {"currency": "RUB", "rate": 12.5})
-            prev_stats["sales_amount"] += convert_currency(order.total_amount, order_shop_cfg["currency"], order_shop_cfg["rate"])
+        # prev_orders 在无负责人筛选分支中未定义，跳过订单汇总（Order 数据已由上方循环处理）
 
         for ad in prev_ads:
             ad_shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5})
@@ -796,7 +793,7 @@ def get_stats_for_period(db: Session, start_date: datetime, end_date: datetime, 
     
     query = db.query(Order).filter(
         Order.order_date >= start_date,
-        Order.order_date <= end_date
+        Order.order_date < end_date
     )
     
     if shop_ids:
@@ -819,7 +816,7 @@ def get_stats_for_period(db: Session, start_date: datetime, end_date: datetime, 
     # 广告数据 - 访客和加购（从analytics表）
     ads_query = db.query(AdRecord).filter(
         AdRecord.record_date >= start_date,
-        AdRecord.record_date <= end_date,
+        AdRecord.record_date < end_date,
         AdRecord.ad_type == "product_analytics",
     )
     if shop_ids:
