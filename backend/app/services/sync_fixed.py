@@ -6,6 +6,7 @@
 3. 数据去重：存在则更新，不存在则插入
 """
 import hashlib
+import time
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -905,6 +906,219 @@ class SyncService:
             "success": True,
             "message": "Yandex product_sales 已由 orders 同步生成，无需重复拉取"
         }
+
+    def sync_yandex_traffic(self, date_from: Optional[str] = None, date_to: Optional[str] = None) -> dict:
+        """
+        Yandex 流量数据同步（shows-sales 报告）：
+        1. 发起 POST /v2/reports/shows-sales/generate
+        2. 轮询直到报告生成完成（异步，约5-10分钟）
+        3. 下载 XLSX，解析 "Аналитика продаж" 工作表
+        4. 写入 AdRecord(advertising) — impressions/visitors/cart_count
+
+        数据映射：
+        - Показы моих товаров → impressions（展示会）
+        - Клики по товарам → visitors（访客）
+        - Добавления в корзину → cart_count（加购数）
+        - Заказанные товары → order_count
+        - Заказано товаров на сумму → order_sum（CNY原值）
+
+        注意：访客数=点击数，加购率=cart_count/visitors，转化率=order_count/visitors
+        """
+        import httpx
+        import io
+        from openpyxl import load_workbook
+        from openpyxl.utils.exceptions import InvalidFileException
+
+        sync_log = self._create_sync_log("traffic")
+
+        try:
+            config = self.shop.platform_config or {}
+            campaign_ids = config.get("campaign_ids", [])
+            if not campaign_ids:
+                msg = "Yandex traffic: platform_config campaign_ids 为空"
+                logger.error(msg)
+                self._finish_sync_log(sync_log, False, 0, msg)
+                return {"success": False, "error": msg}
+
+            # 默认同步昨天（北京时间）
+            if not date_from or not date_to:
+                tz = ZoneInfo("Asia/Shanghai")
+                yesterday = (datetime.now(tz) - timedelta(days=1)).strftime("%Y-%m-%d")
+                date_from = yesterday
+                date_to = yesterday
+
+            logger.info(f"Yandex traffic: campaigns={campaign_ids}, date={date_from} to {date_to}")
+
+            all_records = []
+            for cid in campaign_ids:
+                records = self._fetch_shows_sales_report(cid, date_from, date_to)
+                all_records.extend(records)
+                logger.info(f"  campaign {cid}: 获取 {len(records)} 条流量记录")
+
+            if not all_records:
+                self._finish_sync_log(sync_log, True, 0, "无流量数据")
+                return {"success": True, "count": 0}
+
+            # 写入 AdRecord
+            count = 0
+            for rec in all_records:
+                sku = rec["offer_id"]
+                product = self.db.query(Product).filter(
+                    Product.shop_id == self.shop_id,
+                    Product.sku == sku
+                ).first()
+                if not product:
+                    logger.warning(f"  Yandex traffic: 产品 SKU={sku} 不存在，跳过")
+                    continue
+
+                record_date = datetime.strptime(rec["date"][:10], "%Y-%m-%d").date()
+                existing = self.db.query(AdRecord).filter(
+                    AdRecord.shop_id == self.shop_id,
+                    AdRecord.product_id == product.id,
+                    AdRecord.record_date == record_date,
+                    AdRecord.ad_type == "advertising"
+                ).first()
+
+                if existing:
+                    existing.impressions = rec.get("shows", 0) or 0
+                    existing.visitors = rec.get("clicks", 0) or 0
+                    existing.cart_count = rec.get("to_cart", 0) or 0
+                    existing.order_count = rec.get("order_items", 0) or 0
+                    existing.order_sum = rec.get("order_amount", 0) or 0
+                else:
+                    ad_record = AdRecord(
+                        shop_id=self.shop_id,
+                        product_id=product.id,
+                        record_date=record_date,
+                        ad_type="advertising",
+                        impressions=rec.get("shows", 0) or 0,
+                        visitors=rec.get("clicks", 0) or 0,
+                        cart_count=rec.get("to_cart", 0) or 0,
+                        order_count=rec.get("order_items", 0) or 0,
+                        order_sum=rec.get("order_amount", 0) or 0,
+                        cost=0,
+                        sales=0,
+                    )
+                    self.db.add(ad_record)
+                    count += 1
+
+            self.db.commit()
+            self.shop.last_sync_at = datetime.now(ZoneInfo("Asia/Shanghai"))
+            self.db.commit()
+
+            logger.info(f"Yandex traffic 完成: 新增 {count} 条")
+            self._finish_sync_log(sync_log, True, count, f"新增 {count} 条")
+            return {"success": True, "count": count}
+
+        except Exception as e:
+            logger.error(f"Yandex traffic 同步异常: {e}", exc_info=True)
+            self._finish_sync_log(sync_log, False, 0, str(e))
+            return {"success": False, "error": str(e)}
+
+    def _fetch_shows_sales_report(self, campaign_id: int, date_from: str, date_to: str) -> List[dict]:
+        """
+        内部方法：调用 shows-sales 报告接口，轮询下载解析，返回流量记录列表。
+        """
+        import httpx
+        import io
+        from openpyxl import load_workbook
+        from openpyxl.utils.exceptions import InvalidFileException
+
+        headers = {"Api-Key": self.client.token}
+
+        # Step 1: 发起报告生成
+        body = {
+            "dateFrom": date_from,
+            "dateTo": date_to,
+            "campaignId": campaign_id,
+            "grouping": "OFFERS"
+        }
+        resp = httpx.post(
+            "https://api.partner.market.yandex.ru/v2/reports/shows-sales/generate",
+            headers=headers, json=body, timeout=30
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        report_id = data.get("result", {}).get("reportId")
+        if not report_id:
+            raise Exception(f"shows-sales 生成失败: {data}")
+
+        # Step 2: 轮询等待（最多15分钟）
+        for i in range(90):
+            time.sleep(10)
+            info_resp = httpx.get(
+                f"https://api.partner.market.yandex.ru/v2/reports/info/{report_id}",
+                headers=headers, timeout=15
+            )
+            info = info_resp.json()
+            status = info.get("result", {}).get("status")
+            logger.info(f"  shows-sales poll {i+1}: {status}")
+            if status == "DONE":
+                break
+            if status == "FAILED":
+                raise Exception(f"shows-sales 报告生成失败: {info}")
+        else:
+            raise Exception("shows-sales 报告生成超时（15分钟）")
+
+        # Step 3: 下载并解析 XLSX
+        download_url = info["result"]["file"]
+        dl_resp = httpx.get(download_url, timeout=60)
+        dl_resp.raise_for_status()
+
+        try:
+            wb = load_workbook(io.BytesIO(dl_resp.content))
+        except InvalidFileException:
+            raise Exception("报告文件解析失败（非 XLSX 格式）")
+
+        sheet_name = "Аналитика продаж"
+        if sheet_name not in wb.sheetnames:
+            raise Exception(f"报告缺少工作表 '{sheet_name}'，实际: {wb.sheetnames}")
+
+        ws = wb[sheet_name]
+        headers_row = [cell.value for cell in ws[1]]
+
+        # 列名映射（俄语 → 英文）
+        col_map = {
+            "Ваш SKU": "offer_id",
+            "Название товара": "offer_name",
+            "День": "date",
+            "Показы моих товаров, шт.": "shows",
+            "Клики по товарам, шт.": "clicks",
+            "Добавления в корзину, шт.": "to_cart",
+            "Заказанные товары, шт.": "order_items",
+            "Заказано товаров на сумму, ₽": "order_amount",
+        }
+
+        records = []
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            d = dict(zip(headers_row, row))
+            row_dict = {}
+            for ru_col, key in col_map.items():
+                val = d.get(ru_col)
+                if val is None:
+                    val = 0
+                row_dict[key] = val
+
+            # 过滤无效行（无 SKU 或无展示会）
+            if not row_dict.get("offer_id") or not row_dict.get("shows"):
+                continue
+
+            # 解析日期（格式："25-05-2026" → "2026-05-25"）
+            date_str = str(row_dict.get("date") or "")
+            if date_str and len(date_str) >= 10:
+                # 取后10位 "DD-MM-YYYY" → 转 "YYYY-MM-DD"
+                parts = date_str[-10:].split("-")
+                if len(parts) == 3:
+                    row_dict["date"] = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                else:
+                    row_dict["date"] = date_str[-10:]
+
+            records.append(row_dict)
+
+        logger.info(f"  shows-sales 解析完毕: {len(records)} 条记录")
+        return records
+
+
 
     # ============================================================
     # 全量同步
