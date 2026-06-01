@@ -1024,7 +1024,7 @@ class SyncService:
         from openpyxl import load_workbook
         from openpyxl.utils.exceptions import InvalidFileException
 
-        headers = {"Api-Key": self.client.token}
+        headers = {"Api-Key": self.client.api_token}
 
         # Step 1: 发起报告生成
         body = {
