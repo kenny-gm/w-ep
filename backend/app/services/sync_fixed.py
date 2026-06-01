@@ -1178,6 +1178,11 @@ class SyncService:
                 days=self.HISTORY_DAYS if history else 7
             )
 
+        # 7. Yandex 同步流量数据（shows-sales 报告）
+        if self.shop.platform == "yandex":
+            logger.info("开始同步 Yandex 流量数据...")
+            results["traffic"] = self.sync_yandex_traffic()
+
         logger.info("全量同步完成!")
         return results
 
