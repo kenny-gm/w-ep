@@ -841,10 +841,12 @@ class SyncService:
                     AdRecord.ad_type == "product_analytics"
                 ).first()
                 if existing:
-                    existing.visitors = 0
-                    existing.clicks = 0
-                    existing.cart_count = 0
-                    existing.impressions = 0
+                    # 只更新订单和销售额字段，不清零已有流量字段
+                    # （流量由 traffic 同步写入，orders 同步不能覆盖）
+                    # existing.visitors = 0
+                    # existing.clicks = 0
+                    # existing.cart_count = 0
+                    # existing.impressions = 0
                     existing.order_count = data["order_count"]
                     existing.sales = data["sales_amount"]
                     existing.cost = 0
@@ -980,11 +982,13 @@ class SyncService:
                 ).first()
 
                 if existing:
+                    # 只更新流量字段，不触碰 order_count/sales（这两个字段由 orders 同步写入）
                     existing.impressions = rec.get("shows", 0) or 0
                     existing.visitors = rec.get("clicks", 0) or 0
                     existing.cart_count = rec.get("to_cart", 0) or 0
-                    existing.order_count = rec.get("order_items", 0) or 0
-                    existing.sales = rec.get("order_amount", 0) or 0
+                    # 禁止写入 order_count 和 sales（shows-sales 是下单商品数，不是有效订单数）
+                    # existing.order_count = rec.get("order_items", 0) or 0
+                    # existing.sales = rec.get("order_amount", 0) or 0
                 else:
                     ad_record = AdRecord(
                         shop_id=self.shop_id,
@@ -994,8 +998,8 @@ class SyncService:
                         impressions=rec.get("shows", 0) or 0,
                         visitors=rec.get("clicks", 0) or 0,
                         cart_count=rec.get("to_cart", 0) or 0,
-                        order_count=rec.get("order_items", 0) or 0,
-                        sales=rec.get("order_amount", 0) or 0,
+                        order_count=0,   # 不从 shows-sales 写入
+                        sales=0.0,        # 不从 shows-sales 写入
                     )
                     self.db.add(ad_record)
                     count += 1
