@@ -953,7 +953,18 @@ class SyncService:
 
             if business_id:
                 try:
-                    records, request_failed = self._fetch_shows_sales_report_business(business_id, date_from, date_to)
+                    records, request_failed, rate_limited = self._fetch_shows_sales_report_business(business_id, date_from, date_to)
+
+                    if rate_limited:
+                        logger.warning(f"  businessId shows-sales 420 rate limit，直接返回")
+                        self._finish_sync_log(sync_log, False, 0, "Yandex shows-sales rate limited, retry later")
+                        return {
+                            "success": False,
+                            "rate_limited": True,
+                            "retry_after_seconds": 600,
+                            "message": "Yandex shows-sales rate limited, retry later"
+                        }
+
                     business_request_succeeded = not request_failed
                     all_records = records
                     if business_request_succeeded:
@@ -1062,6 +1073,13 @@ class SyncService:
 
     def _fetch_shows_sales_report_business(self, business_id: int, date_from: str, date_to: str) -> tuple:
         """
+        返回: (records, request_failed, rate_limited)
+          - (records, False, False): 请求成功
+          - ([], False, False): 请求成功但无数据
+          - ([], False, True): 420 rate limited（不允许 fallback）
+          - ([], True, False): 400 参数错误等（允许 fallback）
+        """
+        """
         内部方法：使用 businessId 级别请求 shows-sales 报告（单次请求覆盖所有 campaign）。
         返回: (records: List[dict], request_failed: bool)
         - request_failed=True 表示请求明确失败（400参数错误等），允许 fallback
@@ -1091,19 +1109,19 @@ class SyncService:
         # 420: rate limit，request_failed=False（由调用方处理，不走 fallback）
         if resp.status_code == 420:
             logger.warning(f"  businessId shows-sales 420 rate limit")
-            return ([], False)
+            return ([], False, True)
 
         # 400: 参数错误，request_failed=True（允许 fallback）
         if resp.status_code == 400:
             logger.warning(f"  businessId 请求返回 400（参数错误）: {resp.text}")
-            return ([], True)
+            return ([], True, False)
 
         resp.raise_for_status()
         data = resp.json()
         report_id = data.get("result", {}).get("reportId")
         if not report_id:
             logger.error(f"shows-sales 生成失败: {data}")
-            return ([], True)
+            return ([], True, False)
 
         # Step 2: 轮询等待（最多15分钟）
         for i in range(90):
@@ -1119,10 +1137,10 @@ class SyncService:
                 break
             if status == "FAILED":
                 logger.error(f"shows-sales 报告生成失败: {info}")
-                return ([], True)
+                return ([], True, False)
         else:
             logger.error("shows-sales 报告生成超时（15分钟）")
-            return ([], True)
+            return ([], True, False)
 
         # Step 3: 下载并解析 XLSX
         download_url = info["result"]["file"]
@@ -1133,12 +1151,12 @@ class SyncService:
             wb = load_workbook(io.BytesIO(dl_resp.content))
         except InvalidFileException:
             logger.error("报告文件解析失败（非 XLSX 格式）")
-            return ([], True)
+            return ([], True, False)
 
         sheet_name = "Аналитика продаж"
         if sheet_name not in wb.sheetnames:
             logger.error(f"报告缺少工作表 '{sheet_name}'，实际: {wb.sheetnames}")
-            return ([], True)
+            return ([], True, False)
 
         ws = wb[sheet_name]
         headers_row = [cell.value for cell in ws[1]]
@@ -1179,8 +1197,7 @@ class SyncService:
             records.append(row_dict)
 
         logger.info(f"  shows-sales 解析完毕: {len(records)} 条记录")
-        # request_failed=False 表示请求成功（无论有无数据），不允许 fallback
-        return (records, False)
+        return (records, False, False)
 
     def _fetch_shows_sales_report(self, campaign_id: int, date_from: str, date_to: str) -> List[dict]:
         """
