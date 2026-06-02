@@ -14,6 +14,10 @@ from app.database import engine, Base
 from app.init_db import migrate_add_platform_config
 migrate_add_platform_config()
 
+# 迁移：修复 ad_records 唯一索引（包含 advert_id，解决 WB 同产品同天多广告冲突）
+from migrations.fix_ad_records_dedup_index import migrate_fix_ad_records_dedup_index
+migrate_fix_ad_records_dedup_index()  # 幂等，重复执行无影响
+
 # 导入路由
 from app.routers import auth, dashboard, products, shops, admin, users, inventory, orders, ads, finance, profit
 from app.routers import metric_thresholds
