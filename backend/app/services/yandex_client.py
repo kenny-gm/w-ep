@@ -285,6 +285,7 @@ class YandexClient:
 
                 order_id = str(order.get("id", ""))
                 date_str = payment.get("date", "")[:10]  # ← 用付款时间归类
+                currency = order.get("currency", "CNY")
 
                 items = order.get("items", [])
                 for item in items:
@@ -373,6 +374,7 @@ class YandexClient:
 
                 order_id = str(order.get("id", ""))
                 date_str = payment.get("date", "")[:10]  # ← 用付款时间归类
+                currency = order.get("currency", "CNY")
 
                 items = order.get("items", [])
                 for item in items:

@@ -976,7 +976,7 @@ class SyncService:
                     AdRecord.shop_id == self.shop_id,
                     AdRecord.product_id == product.id,
                     AdRecord.record_date == record_date,
-                    AdRecord.ad_type == "advertising"
+                    AdRecord.ad_type == "product_analytics"
                 ).first()
 
                 if existing:
@@ -984,20 +984,18 @@ class SyncService:
                     existing.visitors = rec.get("clicks", 0) or 0
                     existing.cart_count = rec.get("to_cart", 0) or 0
                     existing.order_count = rec.get("order_items", 0) or 0
-                    existing.order_sum = rec.get("order_amount", 0) or 0
+                    existing.sales = rec.get("order_amount", 0) or 0
                 else:
                     ad_record = AdRecord(
                         shop_id=self.shop_id,
                         product_id=product.id,
                         record_date=record_date,
-                        ad_type="advertising",
+                        ad_type="product_analytics",
                         impressions=rec.get("shows", 0) or 0,
                         visitors=rec.get("clicks", 0) or 0,
                         cart_count=rec.get("to_cart", 0) or 0,
                         order_count=rec.get("order_items", 0) or 0,
-                        order_sum=rec.get("order_amount", 0) or 0,
-                        cost=0,
-                        sales=0,
+                        sales=rec.get("order_amount", 0) or 0,
                     )
                     self.db.add(ad_record)
                     count += 1

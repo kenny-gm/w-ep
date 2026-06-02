@@ -556,6 +556,15 @@ def update_setting(
     
     db.commit()
     
+    # cny_to_rub 变更时同步更新所有 CNY 店铺的 exchange_rate
+    if key == "cny_to_rub":
+        try:
+            new_rate = float(data.value)
+            updated = db.query(Shop).filter(Shop.currency == "CNY").update({"exchange_rate": new_rate})
+            db.commit()
+        except (ValueError, TypeError):
+            pass  # 汇率格式无效则跳过同步
+    
     return {"message": "设置已更新"}
 
 

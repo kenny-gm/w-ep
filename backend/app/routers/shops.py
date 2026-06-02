@@ -563,6 +563,7 @@ def run_sync_job_background(job_id: int, shop_id: int, sync_type: str, history: 
     """后台执行同步任务（独立 session）"""
     import sys, traceback, json
     sys.path.insert(0, '/app/backend')
+    from zoneinfo import ZoneInfo
 
     from app.database import SessionLocal
     from app.services.sync_fixed import SyncService
@@ -716,7 +717,7 @@ def sync_shop_async(
     existing = db.query(SyncJob).filter(
         SyncJob.shop_id == shop_id,
         SyncJob.sync_type == sync_type,
-        SyncJob.status.in_("pending", "running")
+        SyncJob.status.in_(["pending", "running"])
     ).first()
 
     if existing:
@@ -734,7 +735,7 @@ def sync_shop_async(
         status="pending",
         progress=0,
         message="等待同步...",
-        created_by=current_user.get("id") if current_user else None,
+        created_by=current_user.id if current_user else None,
     )
     db.add(job)
     db.commit()
