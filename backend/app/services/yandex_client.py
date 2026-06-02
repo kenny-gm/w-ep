@@ -268,24 +268,29 @@ class YandexClient:
         """
         # records: { (offer_id, day_str): { offer_id, offer_name, day, order_ids_set, quantity, sales_amount } }
         # order_ids_set 用于去重统计 distinct order count
+        # 明确无效的终态（已取消/退款/退货/未支付），精确匹配
+        INVALID_YANDEX_ORDER_STATUSES = {
+            "CANCELLED", "CANCELED", "REFUNDED", "RETURNED", "UNPAID"
+        }
         raw: Dict[tuple, dict] = {}
 
         for cid in campaign_ids:
             orders = self.get_orders(cid, date_from, date_to)
             for order in orders:
-                order_status = str(order.get("status", "")).upper()
-                if any(b in order_status for b in ("CANCELLED", "REFUNDED", "RETURNED", "UNPAID", "CANCELED")):
-                    continue
-
-                # 取付款时间作为日期桶（不用creationDate，避免后续状态变化导致日期漂移）
+                # 先检查是否已付款（必须条件）
                 payments = order.get("payments", [])
                 payment = next((p for p in payments if p.get("type") == "PAYMENT"), None)
                 if not payment:
                     continue  # 未付款的订单不计入
 
+                # 精确匹配无效状态（排除明确无效终态）
+                order_status = str(order.get("status", "")).strip().upper()
+                if order_status in INVALID_YANDEX_ORDER_STATUSES:
+                    continue  # CANCELLED/CANCELED/REFUNDED/RETURNED/UNPAID 不计入
+
+                # 其他状态全部计入（PROCESSING/DELIVERY/PICKUP/DELIVERED 等），只要已付款
                 order_id = str(order.get("id", ""))
                 date_str = payment.get("date", "")[:10]  # ← 用付款时间归类
-                currency = order.get("currency", "CNY")
 
                 items = order.get("items", [])
                 for item in items:
@@ -359,18 +364,22 @@ class YandexClient:
         ]
         """
         rows = []
+        INVALID_YANDEX_ORDER_STATUSES = {
+            "CANCELLED", "CANCELED", "REFUNDED", "RETURNED", "UNPAID"
+        }
         for cid in campaign_ids:
             orders = self.get_orders(cid, date_from, date_to)
             for order in orders:
+                # 先检查是否已付款
                 payments = order.get("payments", [])
                 payment = next((p for p in payments if p.get("type") == "PAYMENT"), None)
                 if not payment:
                     continue
 
-                order_status = str(order.get("status", "")).upper()
-                if any(b in order_status for b in ("CANCELLED", "REFUNDED", "RETURNED", "UNPAID", "CANCELED")):
+                # 精确匹配无效状态
+                order_status = str(order.get("status", "")).strip().upper()
+                if order_status in INVALID_YANDEX_ORDER_STATUSES:
                     continue
-
 
                 order_id = str(order.get("id", ""))
                 date_str = payment.get("date", "")[:10]  # ← 用付款时间归类
