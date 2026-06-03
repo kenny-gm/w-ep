@@ -1,9 +1,12 @@
 <template>
   <div class="dashboard">
     <!-- 数据时间与口径说明 -->
-    <div v-if="dataInfo.data_updated_at || dataInfo.data_staleness" class="data-info-bar">
+    <div v-if="dataInfo.data_updated_at || dataInfo.data_staleness || dataInfo.exchange_rate" class="data-info-bar">
       <span v-if="dataInfo.data_updated_at" class="data-info-item">
         <el-icon><Clock /></el-icon> 数据更新时间：{{ dataInfo.data_updated_at }}
+      </span>
+      <span v-if="dataInfo.exchange_rate" class="data-info-item">
+        <el-icon><Coin /></el-icon> 汇率：{{ dataInfo.exchange_rate }}
       </span>
       <span v-if="dataInfo.data_staleness" class="data-info-item data-info-warning">
         <el-icon><Warning /></el-icon> {{ dataInfo.data_staleness }}
@@ -67,7 +70,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
-import { Money, User, ShoppingCart, Document, Notification, TrendCharts, DataLine, PieChart, Clock, Warning } from '@element-plus/icons-vue'
+import { Money, User, ShoppingCart, Document, Notification, TrendCharts, DataLine, PieChart, Clock, Warning, Coin } from '@element-plus/icons-vue'
 import ProductSalesTable from './ProductSalesTable.vue'
 
 const loading = ref(false)
@@ -86,7 +89,7 @@ const selectedProduct = ref(null)
 const logList = ref([])
 
 const summary = reactive({ total_sales: 0, total_visitors: 0, total_cart: 0, total_orders: 0, total_ad_cost: 0, avg_cart_rate: 0, avg_conversion_rate: 0, avg_ad_ratio: 0, sales_change: 0, visitors_change: 0, cart_change: 0, orders_change: 0, ad_cost_change: 0, cart_rate_change: 0, avg_conversion_rate_change: 0, ad_ratio_change: 0 })
-const dataInfo = reactive({ data_updated_at: '', data_staleness: '' })
+const dataInfo = reactive({ data_updated_at: '', data_staleness: '', exchange_rate: null })
 const thresholds = reactive({ cart_rate: null, conversion_rate: null, ad_ratio: null })
 
 const hasDateRange = computed(() => { if (!filters.start_date || !filters.end_date) return false; const days = Math.ceil((new Date(filters.end_date) - new Date(filters.start_date)) / 86400000) + 1; return days > 1; })
@@ -169,6 +172,7 @@ async function fetchData() {
     // 数据时间信息
     dataInfo.data_updated_at = s.data_updated_at || ''
     dataInfo.data_staleness = s.data_staleness || ''
+    dataInfo.exchange_rate = s.exchange_rate || null
     generateDailyData()
     fetchLogCounts()
   } catch (e) { ElMessage.error('获取数据失败') } finally { loading.value = false }

@@ -37,6 +37,7 @@ class DashboardStats(BaseModel):
     currency: str = "RUB"
     comparison: Optional[dict] = None
     data_updated_at: Optional[str] = None  # 数据最新更新时间
+    exchange_rate: Optional[float] = None  # 当前系统汇率 CNY→RUB
     data_source: str = "database"  # 数据来源: database=本地, api=WB API
     data_staleness: Optional[str] = None  # 数据延迟提示
 
@@ -129,6 +130,12 @@ def _add_data_info(db: Session, stats: DashboardStats) -> DashboardStats:
             stats.data_staleness = "尚未从 WB API 同步广告数据"
     except Exception as e:
         stats.data_updated_at = "未知"
+    # 汇率信息
+    try:
+        sys_setting = db.execute(text("SELECT value FROM system_settings WHERE `key` = 'cny_to_rub'")).fetchone()
+        stats.exchange_rate = float(sys_setting[0]) if sys_setting and sys_setting[0] else 12.5
+    except:
+        stats.exchange_rate = 12.5
     return stats
 
 @router.post("/stats/", response_model=DashboardStats)
@@ -679,6 +686,12 @@ def get_dashboard_products(
             summary["data_staleness"] = "尚未从 WB API 同步广告数据"
     except:
         pass
+    # 汇率信息
+    try:
+        sys_setting = db.execute(text("SELECT value FROM system_settings WHERE `key` = 'cny_to_rub'")).fetchone()
+        summary["exchange_rate"] = float(sys_setting[0]) if sys_setting and sys_setting[0] else 12.5
+    except:
+        summary["exchange_rate"] = 12.5
     
     return {"items": items, "summary": summary, "comparison": comparison}
 
