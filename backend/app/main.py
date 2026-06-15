@@ -22,7 +22,7 @@ migrate_fix_ad_records_dedup_index()  # 幂等，重复执行无影响
 from app.routers import auth, dashboard, products, shops, admin, users, inventory, orders, ads
 from app.routers import metric_thresholds
 from app.routers import alerts, operation_logs, effect_analysis
-from app.routers import dingtalk_connector
+
 
 # 导入所有模型（确保create_all能创建所有表）
 from app.models.models import (
@@ -90,7 +90,6 @@ app.include_router(metric_thresholds.router)
 app.include_router(alerts.router)
 app.include_router(operation_logs.router)
 app.include_router(effect_analysis.router)
-app.include_router(dingtalk_connector.router)
 
 
 @app.get("/")
