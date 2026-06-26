@@ -128,15 +128,29 @@ async function fetchUISettings() {
 
 async function handleLogin() {
   if (!formRef.value) return
-  
+
   await formRef.value.validate(async (valid) => {
     if (!valid) return
-    
+
     loading.value = true
     try {
       await authStore.login(form.username, form.password)
       ElMessage.success('登录成功')
-      router.push('/dashboard')
+      // 根据用户权限跳转：优先客服 > 广告 > 运营日志 > 看板
+      const menuPriority = ['customer-service', 'ads', 'operation-logs', 'dashboard']
+      const userMenus = authStore.user?.allowed_menus || []
+      let redirectPath = '/dashboard'
+      if (authStore.user?.role === 'admin') {
+        redirectPath = '/dashboard'
+      } else if (userMenus.length > 0) {
+        for (const key of menuPriority) {
+          if (userMenus.includes(key)) {
+            redirectPath = `/${key}`
+            break
+          }
+        }
+      }
+      router.push(redirectPath)
     } catch (error) {
       ElMessage.error(error.response?.data?.detail || '登录失败')
     } finally {
