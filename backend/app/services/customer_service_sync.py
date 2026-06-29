@@ -269,7 +269,7 @@ class CustomerServiceSyncService:
             CustomerServiceItem.external_id == external_id_str,
         ).first()
         if existing:
-            # 已有记录，仅追加消息，不重复插入主记录
+            # 已有记录，追加消息，同时刷新主记录关键字段（如 replySign、buyer_key、raw_json）
             self._add_message(
                 item=existing,
                 external_message_id=str(event_id or f"{external_id_str}:{created_at or self._now()}"),
@@ -279,6 +279,16 @@ class CustomerServiceSyncService:
                 created_at_external=created_at,
                 raw=rec,
             )
+            # 刷新 replySign（支持后续刷新过期/缺失的凭证）
+            existing.reply_sign = rec.get("replySign") or rec.get("reply_sign") or existing.reply_sign
+            # 刷新 buyer_key（跨 channel 同买家聚合标识）
+            existing.buyer_key = rec.get("clientName") or rec.get("buyerName") or existing.customer_name or existing.buyer_key or ""
+            # 刷新 raw_json（保留最新原始数据）
+            existing.raw_json = self._json(rec)
+            # 刷新外部更新时间
+            if created_at and created_at > (existing.external_updated_at or existing.external_created_at or self._now()):
+                existing.external_updated_at = created_at
+            existing.updated_at = self._now()
             return existing
         item = self._upsert_item(
             channel="chat",
