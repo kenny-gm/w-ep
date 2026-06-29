@@ -96,42 +96,44 @@ def migrate_add_sync_jobs(db_url: str = None):
     try:
         if "postgres" in db_url.lower():
             # PostgreSQL
-            engine.execute(text("""
-                CREATE TABLE sync_jobs (
-                    id SERIAL PRIMARY KEY,
-                    shop_id INTEGER NOT NULL REFERENCES shops(id),
-                    sync_type VARCHAR(50) NOT NULL,
-                    status VARCHAR(20) DEFAULT 'pending',
-                    progress INTEGER DEFAULT 0,
-                    message TEXT DEFAULT '',
-                    result_json TEXT,
-                    error TEXT,
-                    created_by INTEGER,
-                    started_at TIMESTAMP,
-                    finished_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE sync_jobs (
+                        id SERIAL PRIMARY KEY,
+                        shop_id INTEGER NOT NULL REFERENCES shops(id),
+                        sync_type VARCHAR(50) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        progress INTEGER DEFAULT 0,
+                        message TEXT DEFAULT '',
+                        result_json TEXT,
+                        error TEXT,
+                        created_by INTEGER,
+                        started_at TIMESTAMP,
+                        finished_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
         else:
             # SQLite
-            engine.execute(text("""
-                CREATE TABLE sync_jobs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    shop_id INTEGER NOT NULL,
-                    sync_type VARCHAR(50) NOT NULL,
-                    status VARCHAR(20) DEFAULT 'pending',
-                    progress INTEGER DEFAULT 0,
-                    message TEXT DEFAULT '',
-                    result_json TEXT,
-                    error TEXT,
-                    created_by INTEGER,
-                    started_at TIMESTAMP,
-                    finished_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE sync_jobs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        shop_id INTEGER NOT NULL,
+                        sync_type VARCHAR(50) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        progress INTEGER DEFAULT 0,
+                        message TEXT DEFAULT '',
+                        result_json TEXT,
+                        error TEXT,
+                        created_by INTEGER,
+                        started_at TIMESTAMP,
+                        finished_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
         print("sync_jobs 表创建成功")
         return True
     except Exception as e:
