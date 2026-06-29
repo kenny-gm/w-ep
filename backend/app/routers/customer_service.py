@@ -80,13 +80,84 @@ def get_customer_service_stats(
             CustomerServiceItem.assigned_owner == owner,
         ))
 
+    # 过滤未归档
     open_query = query.filter(CustomerServiceItem.is_archived == False)
+    # 活跃：open / pending_internal / replied（已回复仍计入统计）
+    active_query = open_query.filter(
+        CustomerServiceItem.status.in_(["open", "pending_internal", "replied"])
+    )
+
+    # ---- 评论卡片：差评(1-3星) / 好评(4-5星)，各分待回复/已回复 ----
+    # 待回复：status=open/pending_internal + reply_status=unanswered
+    # 已回复：任意活跃status + reply_status=answered
+    feedback_query = active_query.filter(CustomerServiceItem.channel == "feedback")
+    feedback_low_bad = feedback_query.filter(
+        CustomerServiceItem.rating.in_([1, 2, 3]),
+        CustomerServiceItem.reply_status == "unanswered"
+    ).count()
+    feedback_low_bad_replied = feedback_query.filter(
+        CustomerServiceItem.rating.in_([1, 2, 3]),
+        CustomerServiceItem.reply_status == "answered"
+    ).count()
+    feedback_high_bad = feedback_query.filter(
+        CustomerServiceItem.rating.in_([4, 5]),
+        CustomerServiceItem.reply_status == "unanswered"
+    ).count()
+    feedback_high_bad_replied = feedback_query.filter(
+        CustomerServiceItem.rating.in_([4, 5]),
+        CustomerServiceItem.reply_status == "answered"
+    ).count()
+
+    # ---- 问答卡片：待回复 / 已回复 ----
+    question_query = active_query.filter(CustomerServiceItem.channel == "question")
+    question_unanswered = question_query.filter(
+        CustomerServiceItem.reply_status == "unanswered"
+    ).count()
+    question_answered = question_query.filter(
+        CustomerServiceItem.reply_status == "answered"
+    ).count()
+
+    # ---- 退货卡片：待处理 / 已拒绝 / 已同意 ----
+    # 退货申请 status=open 且 reply_status=unanswered = 待处理
+    # status=closed = 已处理（拒绝/同意均 closed）
+    return_query = open_query.filter(CustomerServiceItem.channel == "return_claim")
+    return_pending = return_query.filter(
+        CustomerServiceItem.status == "open",
+        CustomerServiceItem.reply_status == "unanswered"
+    ).count()
+    return_closed = return_query.filter(
+        CustomerServiceItem.status == "closed"
+    ).count()
+
+    # ---- 聊天卡片：待回复 / 已回复 ----
+    chat_query = active_query.filter(CustomerServiceItem.channel == "chat")
+    chat_unanswered = chat_query.filter(
+        CustomerServiceItem.reply_status == "unanswered"
+    ).count()
+    chat_answered = chat_query.filter(
+        CustomerServiceItem.reply_status.in_(["answered", "replied"])
+    ).count()
+
+    # ---- 全局 ----
+    overdue = open_query.filter(CustomerServiceItem.is_overdue == True).count()
+
     return {
-        "open_total": open_query.filter(CustomerServiceItem.status.in_(["open", "pending_internal"])).count(),
-        "unanswered": open_query.filter(CustomerServiceItem.reply_status == "unanswered").count(),
-        "urgent": open_query.filter(CustomerServiceItem.risk_level == "urgent").count(),
-        "return_claims": open_query.filter(CustomerServiceItem.channel == "return_claim").count(),
-        "overdue": open_query.filter(CustomerServiceItem.is_overdue == True).count(),
+        # 评论
+        "feedback_low_bad_unanswered": feedback_low_bad,
+        "feedback_low_bad_replied": feedback_low_bad_replied,
+        "feedback_high_bad_unanswered": feedback_high_bad,
+        "feedback_high_bad_replied": feedback_high_bad_replied,
+        # 问答
+        "question_unanswered": question_unanswered,
+        "question_answered": question_answered,
+        # 退货
+        "return_pending": return_pending,
+        "return_closed": return_closed,
+        # 聊天
+        "chat_unanswered": chat_unanswered,
+        "chat_answered": chat_answered,
+        # 全局
+        "overdue": overdue,
     }
 
 

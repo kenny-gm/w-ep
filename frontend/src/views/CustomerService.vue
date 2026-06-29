@@ -10,22 +10,88 @@
       </div>
     </div>
 
-    <div class="metrics">
-      <div class="metric">
-        <span>待处理</span>
-        <strong>{{ stats.open_total || 0 }}</strong>
+    <!-- 4个模块统计卡片 -->
+    <div class="channel-cards">
+      <!-- 评论卡片 -->
+      <div class="channel-card">
+        <div class="channel-card-title">
+          <span>买家评论</span>
+          <el-tag size="small" type="danger" effect="plain">差评紧急</el-tag>
+        </div>
+        <div class="channel-card-items">
+          <div class="channel-item" :class="{ 'has-count': stats.feedback_low_bad_unanswered }">
+            <span class="channel-item-label">差评待回复</span>
+            <span class="channel-item-num danger">{{ stats.feedback_low_bad_unanswered || 0 }}</span>
+          </div>
+          <div class="channel-item">
+            <span class="channel-item-label">差评已回复</span>
+            <span class="channel-item-num">{{ stats.feedback_low_bad_replied || 0 }}</span>
+          </div>
+          <div class="channel-item">
+            <span class="channel-item-label">好评待回复</span>
+            <span class="channel-item-num">{{ stats.feedback_high_bad_unanswered || 0 }}</span>
+          </div>
+          <div class="channel-item">
+            <span class="channel-item-label">好评已回复</span>
+            <span class="channel-item-num">{{ stats.feedback_high_bad_replied || 0 }}</span>
+          </div>
+        </div>
       </div>
-      <div class="metric">
-        <span>未回复</span>
-        <strong>{{ stats.unanswered || 0 }}</strong>
+
+      <!-- 问答卡片 -->
+      <div class="channel-card">
+        <div class="channel-card-title">
+          <span>买家问答</span>
+        </div>
+        <div class="channel-card-items">
+          <div class="channel-item" :class="{ 'has-count': stats.question_unanswered }">
+            <span class="channel-item-label">待回复</span>
+            <span class="channel-item-num danger">{{ stats.question_unanswered || 0 }}</span>
+          </div>
+          <div class="channel-item">
+            <span class="channel-item-label">已回复</span>
+            <span class="channel-item-num">{{ stats.question_answered || 0 }}</span>
+          </div>
+        </div>
       </div>
-      <div class="metric danger">
-        <span>紧急</span>
-        <strong>{{ stats.urgent || 0 }}</strong>
+
+      <!-- 退货卡片 -->
+      <div class="channel-card">
+        <div class="channel-card-title">
+          <span>买家退货</span>
+          <el-tag size="small" type="danger" effect="plain">紧急</el-tag>
+        </div>
+        <div class="channel-card-items">
+          <div class="channel-item" :class="{ 'has-count': stats.return_pending }">
+            <span class="channel-item-label">待处理</span>
+            <span class="channel-item-num danger">{{ stats.return_pending || 0 }}</span>
+          </div>
+          <div class="channel-item">
+            <span class="channel-item-label">已拒绝</span>
+            <span class="channel-item-num">-</span>
+          </div>
+          <div class="channel-item">
+            <span class="channel-item-label">已同意</span>
+            <span class="channel-item-num">-</span>
+          </div>
+        </div>
       </div>
-      <div class="metric">
-        <span>退货申请</span>
-        <strong>{{ stats.return_claims || 0 }}</strong>
+
+      <!-- 聊天卡片 -->
+      <div class="channel-card">
+        <div class="channel-card-title">
+          <span>买家聊天</span>
+        </div>
+        <div class="channel-card-items">
+          <div class="channel-item" :class="{ 'has-count': stats.chat_unanswered }">
+            <span class="channel-item-label">待回复</span>
+            <span class="channel-item-num danger">{{ stats.chat_unanswered || 0 }}</span>
+          </div>
+          <div class="channel-item">
+            <span class="channel-item-label">已回复</span>
+            <span class="channel-item-num">{{ stats.chat_answered || 0 }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -485,33 +551,63 @@ function formatHours(hours) {
   font-size: 13px;
 }
 
-.metrics {
+.channel-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
-.metric {
+.channel-card {
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 14px 16px;
 }
 
-.metric span {
-  display: block;
+.channel-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.channel-card-items {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.channel-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.channel-item.has-count {
+  background: #fef2f2;
+}
+
+.channel-item-label {
+  font-size: 11px;
   color: #64748b;
-  font-size: 13px;
 }
 
-.metric strong {
-  display: block;
-  margin-top: 6px;
-  color: #0f172a;
-  font-size: 26px;
+.channel-item-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.2;
 }
 
-.metric.danger strong {
+.channel-item-num.danger {
   color: #dc2626;
 }
 
@@ -736,7 +832,7 @@ function formatHours(hours) {
 }
 
 @media (max-width: 980px) {
-  .metrics,
+  .channel-cards,
   .filters {
     grid-template-columns: 1fr;
   }
