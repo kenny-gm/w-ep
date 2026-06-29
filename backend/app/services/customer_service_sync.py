@@ -6,8 +6,12 @@ v1 只写客服模块自己的表，不写 OperationLog。
 from __future__ import annotations
 
 import json
+import logging
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -116,22 +120,53 @@ class CustomerServiceSyncService:
         try:
             cursor_key = f"customer_service_chat_cursor:{self.shop.id}"
             cursor = self._get_setting(cursor_key)
-            result = self.client.get_chat_events(next_cursor=cursor or None, limit=100)
-            events = self._extract_records(result, ("events", "data", "result"))
-            data_block = result.get("data") if isinstance(result, dict) else {}
-            next_cursor = result.get("next") or result.get("nextCursor") or result.get("cursor")
-            if not next_cursor and isinstance(data_block, dict):
-                next_cursor = data_block.get("next") or data_block.get("nextCursor") or data_block.get("cursor")
 
-            count = 0
-            for rec in events:
-                self._upsert_chat_event(rec)
-                count += 1
+            total_count = 0
+            page_count = 0
+            next_cursor = cursor
+
+            while True:
+                page_count += 1
+                raw = self.client.get_chat_events(next_cursor=next_cursor)
+
+                # 日志记录 WB 原始返回
+                logger.info(
+                    f"[WB Chat Sync][shop {self.shop.id}] 第 {page_count} 页原始返回 keys: "
+                    f"{list(raw.keys()) if isinstance(raw, dict) else type(raw)}"
+                )
+                result_block = raw.get("result") if isinstance(raw, dict) else {}
+                logger.info(
+                    f"[WB Chat Sync][shop {self.shop.id}] 第 {page_count} 页 result keys: "
+                    f"{list(result_block.keys()) if isinstance(result_block, dict) else type(result_block)}"
+                )
+
+                total_events = result_block.get("totalEvents", -1) if isinstance(result_block, dict) else -1
+                events = result_block.get("events", []) if isinstance(result_block, dict) else []
+                next_cursor = result_block.get("next") if isinstance(result_block, dict) else None
+
+                logger.info(
+                    f"[WB Chat Sync][shop {self.shop.id}] 第 {page_count} 页: "
+                    f"totalEvents={total_events}, events数量={len(events)}, next={next_cursor}"
+                )
+
+                for rec in events:
+                    self._upsert_chat_event(rec)
+                    total_count += 1
+
+                # 没有事件时停止（不管 next_cursor 是否还有值，空结果=结束）
+                if not events:
+                    break
+                if not next_cursor:
+                    break
+
+                # 限流保护：页间暂停
+                time.sleep(1.1)
+
             if next_cursor:
                 self._set_setting(cursor_key, str(next_cursor), "WB 买家聊天同步游标")
             self.db.commit()
-            self._finish_sync_log(sync_log, True, count, "WB 买家聊天同步完成")
-            return {"success": True, "count": count, "next_cursor": next_cursor}
+            self._finish_sync_log(sync_log, True, total_count, f"WB 买家聊天同步完成，共 {page_count} 页 {total_count} 条")
+            return {"success": True, "count": total_count, "pages": page_count, "next_cursor": next_cursor}
         except WBCustomerRateLimit as exc:
             self.db.rollback()
             self._finish_sync_log(sync_log, False, 0, f"WB 聊天限流: {exc}")
@@ -255,7 +290,7 @@ class CustomerServiceSyncService:
         message_obj = rec.get("message") or {}
         # WB 聊天接口 message 是 object：{"text": "...", "attachments": {"goodCard": {...}}}
         good_card = message_obj.get("attachments", {}).get("goodCard") or rec.get("goodCard") or rec.get("product") or {}
-        nm_id = rec.get("nmId") or good_card.get("nmId")
+        nm_id = rec.get("nmId") or rec.get("nmID") or good_card.get("nmId") or good_card.get("nmID")
         text = message_obj.get("text") or rec.get("text") or rec.get("body") or ""
         # WB 聊天接口用 addTimestamp（Unix ms），addTime 是 ISO 字符串
         created_at = self._parse_dt(rec.get("addTimestamp")) or self._parse_dt(rec.get("addTime")) or self._parse_dt(rec.get("createdAt")) or self._parse_dt(rec.get("date"))

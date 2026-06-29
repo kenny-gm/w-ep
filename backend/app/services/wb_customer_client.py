@@ -187,9 +187,9 @@ class WBCustomerClient:
     def get_chat_events(
         self,
         next_cursor: Optional[str] = None,
-        limit: int = 100,
     ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {"limit": limit}
+        """WB 买家聊天事件流。首次请求不带 next，后续请求带 next。"""
+        params: Dict[str, Any] = {}
         if next_cursor:
             params["next"] = next_cursor
         return self._request(
@@ -252,7 +252,8 @@ class WBCustomerClient:
     def check_permissions(self) -> Dict[str, Dict[str, Any]]:
         checks = {
             "feedbacks_questions": lambda: self.get_questions(take=1, skip=0),
-            "buyers_chat": lambda: self.get_chats(limit=1, offset=0),
+            "buyers_chat_list": lambda: self.get_chats(limit=1, offset=0),
+            "buyers_chat_events": lambda: self.get_chat_events(),
             "buyers_returns": lambda: self.get_return_claims(limit=1, offset=0),
         }
 

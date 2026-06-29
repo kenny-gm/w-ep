@@ -13,6 +13,7 @@ import app
 from fastapi import BackgroundTasks
 from app.routers.auth import get_current_user, get_current_admin
 from app.services.sync_fixed import SyncService
+from app.services.customer_service_sync import CustomerServiceSyncService
 from app.utils.timezone import format_shanghai_time
 
 router = APIRouter(prefix="/api/shops", tags=["店铺管理"])
@@ -385,6 +386,20 @@ def _sync_shop_data_internal(
             results["product_sales"] = sync_service.sync_product_sales(days=30 if history else 7)
         elif sync_type == "all":
             results = sync_service.sync_all(history=history)
+            # WB 店铺追加客服同步（失败不中断主流程）
+            if shop.platform == "wildberries":
+                try:
+                    cs_result = CustomerServiceSyncService(db, shop).sync_all(days=30)
+                    results["customer_service"] = cs_result
+                except Exception as e:
+                    logger.warning(f"客服同步失败（不影响主同步）: {e}")
+                    results["customer_service"] = {"success": False, "error": str(e)}
+        elif sync_type == "customer_service":
+            if shop.platform != "wildberries":
+                results["customer_service"] = {"success": True, "message": "仅 WB 店铺支持客服同步"}
+            else:
+                cs_result = CustomerServiceSyncService(db, shop).sync_all(days=30)
+                results["customer_service"] = cs_result
     except Exception as e:
         logger.error(f"同步失败: {str(e)}", exc_info=True)
         return {
@@ -637,6 +652,18 @@ def run_sync_job_background(job_id: int, shop_id: int, sync_type: str, history: 
             else:
                 r_traffic = {"success": True, "message": "WB 无流量报告"}
 
+            job.progress = 90
+            job.message = "同步客服数据..."
+            db.commit()
+            if shop.platform == "wildberries":
+                from app.services.customer_service_sync import CustomerServiceSyncService
+                try:
+                    r_cs = CustomerServiceSyncService(db, shop).sync_all(days=30)
+                except Exception as e:
+                    r_cs = {"success": False, "error": str(e)}
+            else:
+                r_cs = {"success": True, "message": "仅 WB 店铺支持客服同步"}
+
             job.progress = 95
             job.message = "完成..."
             db.commit()
@@ -648,6 +675,7 @@ def run_sync_job_background(job_id: int, shop_id: int, sync_type: str, history: 
                 "ads": r_ads,
                 "keywords": r_keywords,
                 "traffic": r_traffic,
+                "customer_service": r_cs,
             }
 
         elif sync_type == "products":
@@ -675,6 +703,12 @@ def run_sync_job_background(job_id: int, shop_id: int, sync_type: str, history: 
                 result = svc.sync_yandex_product_sales(days=days)
             else:
                 result = svc.sync_product_sales(days=days)
+        elif sync_type == "customer_service":
+            if shop.platform != "wildberries":
+                result = {"success": True, "message": "仅 WB 店铺支持客服同步"}
+            else:
+                from app.services.customer_service_sync import CustomerServiceSyncService
+                result = CustomerServiceSyncService(db, shop).sync_all(days=30)
         else:
             raise Exception(f"未知的 sync_type: {sync_type}")
 

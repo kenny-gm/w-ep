@@ -488,5 +488,223 @@ def test_sync_task_writes_failed_on_subtask_failure(mock_db, mock_shop_wb, mock_
         f"message 应包含失败信息，实际: {updated_log.message}"
 
 
+# ============================================================
+# Test 5: sync_chats 循环分页 + result.result 结构
+# ============================================================
+
+def test_sync_chats_reads_result_result_and_pages(mock_db, mock_shop_wb, mock_product):
+    """
+    sync_chats() 应读取 result['result']['events']/next/totalEvents，
+    当第二页 totalEvents=0 时停止循环。
+    """
+    from app.services.customer_service_sync import CustomerServiceSyncService
+
+    svc = CustomerServiceSyncService(mock_db, mock_shop_wb)
+
+    page_calls = {"count": 0}
+
+    def fake_get_chat_events(next_cursor=None):
+        page_calls["count"] += 1
+        if page_calls["count"] == 1:
+            return {
+                "result": {
+                    "next": "cursor-page2",
+                    "totalEvents": 3,
+                    "events": [
+                        {
+                            "chatID": "chat-page1-1",
+                            "eventID": 101,
+                            "clientName": "买家1",
+                            "message": {"text": "第一页消息1", "attachments": {}},
+                            "addTime": "2026-06-29T10:00:00",
+                            "status": "open",
+                        },
+                        {
+                            "chatID": "chat-page1-2",
+                            "eventID": 102,
+                            "clientName": "买家2",
+                            "message": {"text": "第一页消息2", "attachments": {}},
+                            "addTime": "2026-06-29T10:01:00",
+                            "status": "open",
+                        },
+                    ],
+                }
+            }
+        else:
+            return {
+                "result": {
+                    "next": None,
+                    "totalEvents": 0,
+                    "events": [
+                        {
+                            "chatID": "chat-page2-1",
+                            "eventID": 201,
+                            "clientName": "买家3",
+                            "message": {"text": "第二页消息1", "attachments": {}},
+                            "addTime": "2026-06-29T10:05:00",
+                            "status": "open",
+                        },
+                    ],
+                }
+            }
+
+    def noop_create(self, *args, **kwargs):
+        m = MagicMock()
+        m.id = 1
+        return m
+    def noop_finish(self, *args, **kwargs):
+        pass
+
+    with patch.object(type(svc), "_create_sync_log", noop_create):
+        with patch.object(type(svc), "_finish_sync_log", noop_finish):
+            with patch.object(svc.client, "get_chat_events", side_effect=fake_get_chat_events):
+                result = svc.sync_chats()
+
+    assert result["success"] is True
+    assert result["count"] == 3, f"共3条事件(2+1)，实际: {result['count']}"
+    assert page_calls["count"] == 2, f"应请求2页，实际: {page_calls['count']}"
+
+
+def test_sync_chats_stops_when_no_events(mock_db, mock_shop_wb, mock_product):
+    """第一页 totalEvents=0 且无 events 时应立即停止（不请求第二页）"""
+    from app.services.customer_service_sync import CustomerServiceSyncService
+
+    svc = CustomerServiceSyncService(mock_db, mock_shop_wb)
+
+    call_count = {"n": 0}
+
+    def fake_get_chat_events(next_cursor=None):
+        call_count["n"] += 1
+        return {
+            "result": {
+                "next": "some-cursor",  # 仍有 next，但无 events = 结束
+                "totalEvents": 0,
+                "events": [],
+            }
+        }
+
+    def noop_create(self, *args, **kwargs):
+        m = MagicMock()
+        m.id = 1
+        return m
+    def noop_finish(self, *args, **kwargs):
+        pass
+
+    with patch.object(type(svc), "_create_sync_log", noop_create):
+        with patch.object(type(svc), "_finish_sync_log", noop_finish):
+            with patch.object(svc.client, "get_chat_events", side_effect=fake_get_chat_events):
+                result = svc.sync_chats()
+
+    assert result["success"] is True
+    assert result["count"] == 0
+    assert call_count["n"] == 1, "无 events 时应只请求1页就停止（忽略 next_cursor）"
+
+
+# ============================================================
+# Test 6: nmID 字段兼容商品匹配
+# ============================================================
+
+def test_chat_nmID_field_matches_product(mock_db, mock_shop_wb, mock_product):
+    """聊天事件中 nmID（大写D）应能匹配到 Product"""
+    from app.services.customer_service_sync import CustomerServiceSyncService
+    from app.models.models import CustomerServiceItem
+
+    svc = CustomerServiceSyncService(mock_db, mock_shop_wb)
+    # mock_product.nm_id = "12345"
+
+    def noop_create(self, *args, **kwargs):
+        m = MagicMock()
+        m.id = 1
+        return m
+    def noop_finish(self, *args, **kwargs):
+        pass
+
+    # 使用 nmID（大写D）而非 nmId
+    event = {
+        "chatID": "chat-nmid-test",
+        "eventID": 501,
+        "clientName": "买家nmID",
+        "nmID": "12345",  # 大写 D
+        "message": {
+            "text": "商品咨询",
+            "attachments": {
+                "goodCard": {"nmID": "12345", "title": "测试商品"}
+            },
+        },
+        "addTime": "2026-06-29T14:00:00",
+        "status": "open",
+    }
+
+    with patch.object(type(svc), "_create_sync_log", noop_create):
+        with patch.object(type(svc), "_finish_sync_log", noop_finish):
+            item = svc._upsert_chat_event(event)
+    mock_db.commit()
+
+    assert item.product_id == mock_product.id, \
+        f"nmID=12345 应匹配到 product_id={mock_product.id}，实际: {item.product_id}"
+    assert item.nm_id == "12345"
+
+
+# ============================================================
+# Test 7: get_chat_events 不传 limit 参数
+# ============================================================
+
+def test_get_chat_events_no_limit_param(mock_db, mock_shop_wb):
+    """get_chat_events() 首次请求不应带 limit 参数，后续带 next"""
+    from app.services.wb_customer_client import WBCustomerClient
+
+    calls = []
+
+    def fake_request(method, base_url, path, params=None, json_data=None):
+        calls.append({"method": method, "path": path, "params": params})
+        return {"result": {"events": [], "totalEvents": 0, "next": None}}
+
+    client = WBCustomerClient("fake-token")
+    with patch.object(client, "_request", side_effect=fake_request):
+        # 首次请求不带 next
+        client.get_chat_events()
+        # 第二次请求带 next
+        client.get_chat_events(next_cursor="cursor-abc")
+
+    assert "limit" not in calls[0]["params"], \
+        f"首次请求不应含 limit，实际 params: {calls[0]['params']}"
+    assert calls[1]["params"].get("next") == "cursor-abc", \
+        f"第二次请求应带 next=cursor-abc，实际: {calls[1]['params']}"
+
+
+# ============================================================
+# Test 8: Chat API 错误处理
+# ============================================================
+
+def test_sync_chats_handles_api_error(mock_db, mock_shop_wb, mock_product):
+    """聊天 API 返回 400/401/403/429 时 SyncLog 应写入对应状态"""
+    from app.services.customer_service_sync import CustomerServiceSyncService
+    from app.services.wb_customer_client import WBCustomerAPIError, WBCustomerRateLimit
+    from app.models.models import SyncLog
+
+    svc = CustomerServiceSyncService(mock_db, mock_shop_wb)
+
+    def noop_create(self, *args, **kwargs):
+        m = MagicMock()
+        m.id = 1
+        return m
+    def noop_finish(self, *args, **kwargs):
+        pass
+
+    for exc_class, expected_status in [
+        (WBCustomerRateLimit("WB 限流"), "failed"),
+        (WBCustomerAPIError("WB API 401 token无效"), "failed"),
+        (WBCustomerAPIError("WB API 403 权限不足"), "failed"),
+        (WBCustomerAPIError("WB API 400 参数错误"), "failed"),
+    ]:
+        with patch.object(type(svc), "_create_sync_log", noop_create):
+            with patch.object(type(svc), "_finish_sync_log", noop_finish):
+                with patch.object(svc.client, "get_chat_events", side_effect=exc_class):
+                    result = svc.sync_chats()
+
+        assert result["success"] is False, \
+            f"{exc_class} 时 success 应为 False，实际: {result}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
