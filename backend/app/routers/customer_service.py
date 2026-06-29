@@ -270,7 +270,7 @@ def reply_customer_service_item(
         elif item.channel == "feedback":
             response = client.answer_feedback(item.external_id, message)
         elif item.channel == "chat":
-            reply_sign = _raw(item).get("replySign") or _raw(item).get("reply_sign")
+            reply_sign = item.reply_sign or _raw(item).get("replySign") or _raw(item).get("reply_sign")
             if not reply_sign:
                 raise HTTPException(status_code=400, detail="该聊天缺少 replySign，不能从系统直接发送")
             response = client.send_chat_message(reply_sign, message)

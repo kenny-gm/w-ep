@@ -1,13 +1,16 @@
 """
-Migration: 给 customer_service_items 增加 buyer_key 字段和索引
+Migration: 给 customer_service_items 增加 buyer_key 和 reply_sign 字段
 
-buyer_key 用于跨 channel（问答/评价/聊天/退货申请）聚合同一买家的所有事项。
+buyer_key  用于跨 channel（问答/评价/聊天/退货申请）聚合同一买家的所有事项。
+reply_sign 用于存储买家聊天的回复凭证，replySign 过期或缺失时支持刷新。
 
-回填逻辑（与 _buyer_key() 一致）：
+buyer_key 回填逻辑（与 _buyer_key() 一致）：
 - feedback/question → userName 或 customer_name
 - chat            → clientName 或 customer_name
 - return_claim    → srid 或 customer_name
 - 其他            → customer_name
+
+reply_sign 回填：chat 记录从 raw_json.replySign 回填。
 
 幂等：可重复执行。
 """
@@ -17,7 +20,7 @@ from sqlalchemy import text
 from app.database import engine
 
 
-def migrate_add_buyer_key():
+def migrate_add_buyer_key_and_reply_sign():
     with engine.connect() as conn:
         # Step 1: 检查表是否存在
         result = conn.execute(text(
@@ -27,10 +30,10 @@ def migrate_add_buyer_key():
             print("[migration] customer_service_items 表不存在，跳过")
             return True
 
-        # Step 2: 检查 buyer_key 列是否已存在
         col_result = conn.execute(text("PRAGMA table_info(customer_service_items)"))
         existing_cols = [row[1] for row in col_result.fetchall()]
 
+        # Step 2: buyer_key 列
         if "buyer_key" not in existing_cols:
             print("[migration] buyer_key 列不存在，添加...")
             conn.execute(text("ALTER TABLE customer_service_items ADD COLUMN buyer_key TEXT"))
@@ -39,19 +42,25 @@ def migrate_add_buyer_key():
         else:
             print("[migration] buyer_key 列已存在")
 
-        # Step 3: 回填 buyer_key（基于 raw_json 和 customer_name，复用 _buyer_key 逻辑）
-        print("[migration] 开始回填 buyer_key...")
+        # Step 3: reply_sign 列
+        if "reply_sign" not in existing_cols:
+            print("[migration] reply_sign 列不存在，添加...")
+            conn.execute(text("ALTER TABLE customer_service_items ADD COLUMN reply_sign TEXT"))
+            conn.commit()
+            print("[migration] reply_sign 列添加成功")
+        else:
+            print("[migration] reply_sign 列已存在")
 
-        # 查询所有 buyer_key 为 NULL 的记录
+        # Step 4: 回填 buyer_key
+        print("[migration] 开始回填 buyer_key...")
         result = conn.execute(text(
             "SELECT id, channel, customer_name, raw_json FROM customer_service_items WHERE buyer_key IS NULL OR buyer_key = ''"
         ))
         rows = result.fetchall()
-
         if not rows:
-            print("[migration] 无需回填，所有记录已有 buyer_key")
+            print("[migration] 无需回填 buyer_key，所有记录已有值")
         else:
-            print(f"[migration] 待回填记录数: {len(rows)}")
+            print(f"[migration] 待回填 buyer_key 记录数: {len(rows)}")
             for row in rows:
                 row_id, channel, customer_name, raw_json_str = row
                 raw = {}
@@ -59,7 +68,6 @@ def migrate_add_buyer_key():
                     raw = json.loads(raw_json_str or "{}")
                 except Exception:
                     pass
-
                 if channel in ("feedback", "question"):
                     buyer_key = raw.get("userName") or customer_name or ""
                 elif channel == "chat":
@@ -68,16 +76,41 @@ def migrate_add_buyer_key():
                     buyer_key = raw.get("srid") or customer_name or ""
                 else:
                     buyer_key = customer_name or ""
-
                 if buyer_key:
                     conn.execute(
                         text("UPDATE customer_service_items SET buyer_key = :bk WHERE id = :id"),
                         {"bk": buyer_key, "id": row_id}
                     )
             conn.commit()
-            print(f"[migration] 回填完成")
+            print("[migration] buyer_key 回填完成")
 
-        # Step 4: 检查索引是否存在
+        # Step 5: 回填 reply_sign（仅限 chat 且 raw_json 有 replySign）
+        print("[migration] 开始回填 reply_sign...")
+        result = conn.execute(text(
+            "SELECT id, raw_json FROM customer_service_items WHERE channel = 'chat' AND (reply_sign IS NULL OR reply_sign = '')"
+        ))
+        rows = result.fetchall()
+        if not rows:
+            print("[migration] 无需回填 reply_sign")
+        else:
+            print(f"[migration] 待回填 reply_sign 记录数: {len(rows)}")
+            for row in rows:
+                row_id, raw_json_str = row
+                raw = {}
+                try:
+                    raw = json.loads(raw_json_str or "{}")
+                except Exception:
+                    pass
+                reply_sign = raw.get("replySign") or raw.get("reply_sign") or ""
+                if reply_sign:
+                    conn.execute(
+                        text("UPDATE customer_service_items SET reply_sign = :rs WHERE id = :id"),
+                        {"rs": reply_sign, "id": row_id}
+                    )
+            conn.commit()
+            print("[migration] reply_sign 回填完成")
+
+        # Step 6: buyer_key 索引
         index_result = conn.execute(text(
             "SELECT name FROM sqlite_master WHERE type='index' AND name='ix_customer_service_items_buyer_key'"
         ))
@@ -88,13 +121,13 @@ def migrate_add_buyer_key():
         else:
             print("[migration] 索引 ix_customer_service_items_buyer_key 已存在")
 
-        # Step 5: 验证
-        verify = conn.execute(text("SELECT COUNT(*) FROM customer_service_items WHERE buyer_key IS NOT NULL AND buyer_key != ''"))
-        count = verify.fetchone()[0]
-        print(f"[migration] ✅ 完成，buyer_key 非空记录: {count} 条")
+        # Step 7: 验证
+        bk_count = conn.execute(text("SELECT COUNT(*) FROM customer_service_items WHERE buyer_key IS NOT NULL AND buyer_key != ''")).fetchone()[0]
+        rs_count = conn.execute(text("SELECT COUNT(*) FROM customer_service_items WHERE reply_sign IS NOT NULL AND reply_sign != ''")).fetchone()[0]
+        print(f"[migration] ✅ 完成，buyer_key 非空: {bk_count} 条，reply_sign 非空: {rs_count} 条")
         return True
 
 
 if __name__ == "__main__":
-    success = migrate_add_buyer_key()
+    success = migrate_add_buyer_key_and_reply_sign()
     exit(0 if success else 1)

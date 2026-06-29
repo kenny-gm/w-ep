@@ -390,6 +390,9 @@ class CustomerServiceSyncService:
             item.buyer_key = raw.get("srid") or customer_name or item.buyer_key
         else:
             item.buyer_key = customer_name or item.buyer_key
+        # reply_sign：聊天回复凭证，支持后续刷新
+        if channel == "chat":
+            item.reply_sign = raw.get("replySign") or raw.get("reply_sign") or item.reply_sign
         item.updated_at = self._now()
         return item
 
