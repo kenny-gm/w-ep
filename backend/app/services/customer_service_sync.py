@@ -42,7 +42,24 @@ class CustomerServiceSyncService:
             "return_claims": self.sync_return_claims(),
         }
         total = sum(v.get("count", 0) for v in results.values() if isinstance(v, dict))
-        return {"success": True, "count": total, "results": results}
+        failed_channels = []
+        errors = []
+        rate_limited_channels = []
+        for channel, result in results.items():
+            if isinstance(result, dict) and not result.get("success", True):
+                failed_channels.append(channel)
+                if result.get("rate_limited"):
+                    rate_limited_channels.append(channel)
+                errors.append(f"{channel}: {result.get('error', 'unknown')}")
+        overall_success = not failed_channels
+        return {
+            "success": overall_success,
+            "count": total,
+            "results": results,
+            "failed_channels": failed_channels,
+            "rate_limited_channels": rate_limited_channels,
+            "errors": errors,
+        }
 
     def sync_questions(self, days: int = 30) -> Dict[str, Any]:
         sync_log = self._create_sync_log("customer_service_questions")
