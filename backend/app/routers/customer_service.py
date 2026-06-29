@@ -31,7 +31,7 @@ from app.models.models import (
 )
 from app.routers.auth import get_current_user
 from app.services.customer_service_sync import CustomerServiceSyncService
-from app.services.wb_customer_client import WBCustomerClient, WBCustomerRateLimit
+from app.services.wb_customer_client import WBCustomerAPIError, WBCustomerClient, WBCustomerRateLimit
 
 
 router = APIRouter(prefix="/api/customer-service", tags=["客服工作台"])
@@ -280,6 +280,17 @@ def reply_customer_service_item(
         _record_action(db, item, current_user, action_type, request={"message": message}, success=False, error=str(exc))
         db.commit()
         raise HTTPException(status_code=429, detail=f"WB API 限流: {exc}")
+    except WBCustomerAPIError as exc:
+        _record_action(db, item, current_user, action_type, request={"message": message}, success=False, error=str(exc))
+        db.commit()
+        # 根据错误类型返回明确的状态码
+        err_str = str(exc)
+        if "token 无效" in err_str or "401" in err_str:
+            raise HTTPException(status_code=401, detail=f"WB API 认证失败: {exc}")
+        elif "权限不足" in err_str or "403" in err_str:
+            raise HTTPException(status_code=403, detail=f"WB API 权限不足: {exc}")
+        else:
+            raise HTTPException(status_code=502, detail=f"WB API 请求失败: {exc}")
 
     first_response = item.first_replied_at is None
     now = _now()
@@ -373,6 +384,16 @@ def answer_return_claim(
         _record_action(db, item, current_user, f"return_{data.action}", request=data.dict(), success=False, error=str(exc))
         db.commit()
         raise HTTPException(status_code=429, detail=f"WB API 限流: {exc}")
+    except WBCustomerAPIError as exc:
+        _record_action(db, item, current_user, f"return_{data.action}", request=data.dict(), success=False, error=str(exc))
+        db.commit()
+        err_str = str(exc)
+        if "token 无效" in err_str or "401" in err_str:
+            raise HTTPException(status_code=401, detail=f"WB API 认证失败: {exc}")
+        elif "权限不足" in err_str or "403" in err_str:
+            raise HTTPException(status_code=403, detail=f"WB API 权限不足: {exc}")
+        else:
+            raise HTTPException(status_code=502, detail=f"WB API 请求失败: {exc}")
 
     item.reply_status = "answered"
     item.status = "closed"
