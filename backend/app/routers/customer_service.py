@@ -169,18 +169,8 @@ def get_related_items(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """获取同一买家（buyer_key）的其他客服事项，含不同 channel"""
-    item = _get_visible_item(db, item_id, current_user)
-    buyer_key = _buyer_key(item)
-    if not buyer_key:
-        return {"items": []}
-    query = _visible_query(db.query(CustomerServiceItem), current_user)
-    related = query.filter(
-        CustomerServiceItem.id != item_id,
-        CustomerServiceItem.buyer_key == buyer_key,
-        CustomerServiceItem.is_archived == False,
-    ).order_by(CustomerServiceItem.external_created_at.desc()).limit(10).all()
-    return {"items": [_serialize_item(it) for it in related]}
+    """跨渠道聚合已禁用，WB 无稳定跨渠道买家ID，始终返回空列表"""
+    return {"items": []}
 
 
 @router.post("/sync")
@@ -662,7 +652,8 @@ def _serialize_item(
         "raw_json": _raw(item),
         "created_at": _fmt(item.created_at),
         "updated_at": _fmt(item.updated_at),
-        "buyer_key": _buyer_key(item),
+        # buyer_key 已废弃，WB 无跨渠道买家ID
+        # "buyer_key": _buyer_key(item),
     }
     if include_messages:
         messages = sorted(item.messages or [], key=lambda m: m.created_at_external or m.created_at)
@@ -762,16 +753,10 @@ def _make_russian_reply_draft(item: CustomerServiceItem) -> str:
     )
 
 
+# deprecated: WB 无稳定跨渠道买家ID，不再用于跨channel聚合
 def _buyer_key(item: CustomerServiceItem) -> str:
-    raw = _raw(item)
-    if item.channel in ("feedback", "question"):
-        return raw.get("userName") or item.customer_name or ""
-    if item.channel == "chat":
-        return raw.get("clientName") or item.customer_name or ""
-    if item.channel == "return_claim":
-        # srid 是 WB 内部订单+买家标识，可用于跨 channel 关联同一买家
-        return raw.get("srid") or item.customer_name or ""
-    return item.customer_name or ""
+    """已废弃，保留仅用于避免现有调用报错"""
+    return ""
 
 
 def _rating_stars(rating: Optional[int]) -> str:

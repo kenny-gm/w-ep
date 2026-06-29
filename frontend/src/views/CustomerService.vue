@@ -82,7 +82,7 @@
           <div class="meta-line">
             <span>{{ item.shop_name }}</span>
             <span>{{ item.owner || item.assigned_owner || '未分配' }}</span>
-            <span v-if="item.buyer_key" class="buyer-key">买家：{{ item.buyer_key }}</span>
+
           </div>
           <div v-if="item.channel === 'return_claim'" class="countdown" :class="countdownClass(item)">
             退货处理剩余 {{ formatHours(item.sla_hours_left) }}
@@ -176,19 +176,6 @@
           </div>
         </div>
 
-        <div v-if="relatedItems.length" class="related-items">
-          <h4>同一买家的其他事项</h4>
-          <div
-            v-for="rel in relatedItems"
-            :key="rel.id"
-            class="related-item"
-            @click="selectItem(rel)"
-          >
-            <el-tag size="small" :type="channelTag(rel.channel)">{{ channelLabel(rel.channel) }}</el-tag>
-            <span class="related-title">{{ rel.product_name || rel.product_name_ru || rel.sku || rel.nm_id }}</span>
-            <span class="related-time">{{ rel.external_created_at }}</span>
-          </div>
-        </div>
       </section>
 
       <section class="detail empty hide-on-mobile" v-if="!activeItem">
@@ -214,7 +201,6 @@ const items = ref([])
 const activeItem = ref(null)
 const stats = ref({})
 const replyText = ref('')
-const relatedItems = ref([])
 
 const filters = reactive({
   search: '',
@@ -290,13 +276,6 @@ async function selectItem(item) {
   const res = await axios.get(`/api/customer-service/items/${item.id}`)
   activeItem.value = res.data
   replyText.value = ''
-  // 加载同买家其他事项
-  try {
-    const rel = await axios.get(`/api/customer-service/items/${item.id}/related`)
-    relatedItems.value = rel.data.items || []
-  } catch {
-    relatedItems.value = []
-  }
 }
 
 async function syncCustomerService() {
@@ -640,44 +619,6 @@ function formatHours(hours) {
   font-size: 11px;
 }
 
-.related-items {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.related-items h4 {
-  font-size: 13px;
-  color: #64748b;
-  margin: 0 0 8px 0;
-}
-
-.related-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.related-item:hover {
-  background: #f1f5f9;
-}
-
-.related-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #334155;
-}
-
-.related-time {
-  color: #94a3b8;
-  font-size: 11px;
-}
 
 .countdown {
   margin-top: 8px;

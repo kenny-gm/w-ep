@@ -22,6 +22,10 @@ migrate_fix_ad_records_dedup_index()  # 幂等，重复执行无影响
 from migrations.add_buyer_key_column import migrate_add_buyer_key_and_reply_sign
 migrate_add_buyer_key_and_reply_sign()  # 幂等，重复执行无影响
 
+# 迁移：补全 customer_service_items 缺失列（初始化表结构不完整 bug）
+from migrations.fix_customer_service_items_columns import migrate_fix_customer_service_items_columns
+migrate_fix_customer_service_items_columns()  # 幂等，重复执行无影响
+
 # 导入路由
 from app.routers import auth, dashboard, products, shops, admin, users, inventory, orders, ads, customer_service
 from app.routers import metric_thresholds

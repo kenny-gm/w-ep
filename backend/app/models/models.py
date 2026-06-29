@@ -397,7 +397,7 @@ class CustomerServiceItem(Base):
     return_deadline_hours = Column(Integer, default=120)
 
     raw_json = Column(Text, default="{}")
-    buyer_key = Column(String(200), nullable=True, index=True)  # 同买家跨 channel 聚合标识
+    buyer_key = Column(String(200), nullable=True, index=True)  # deprecated: WB 无稳定跨渠道买家ID，不再用于聚合，保留字段仅避免破坏性DB迁移
     reply_sign = Column(String(200), nullable=True)  # 买家聊天回复凭证（WB API 发送用）
     created_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")))
     updated_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")), onupdate=lambda ctx: datetime.now(ZoneInfo("Asia/Shanghai")))

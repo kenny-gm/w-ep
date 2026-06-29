@@ -3,7 +3,7 @@
 
 覆盖：
 1. sync_all() 子任务失败时返回 success=False + failed_channels
-2. 已有 chat 再次同步时 reply_sign / buyer_key 被刷新
+2. 已有 chat 再次同步时 reply_sign 刷新、buyer_key 不再刷新（跨渠道聚合已废弃）
 3. migration 幂等添加 buyer_key + reply_sign 列
 
 运行方式：
@@ -222,8 +222,8 @@ def test_existing_chat_refreshes_reply_sign_on_resync(mock_db, mock_shop_wb, moc
         f"reply_sign 应被刷新，实际: {updated.reply_sign}"
 
 
-def test_existing_chat_refreshes_buyer_key_on_resync(mock_db, mock_shop_wb, mock_product):
-    """已有 chat 事项，后续同步 buyer_key 变化时也应刷新"""
+def test_existing_chat_does_not_refresh_buyer_key_on_resync(mock_db, mock_shop_wb, mock_product):
+    """buyer_key 已废弃：已有 chat 事项再次同步时，buyer_key 不应再被刷新（WB 无跨渠道买家ID）"""
     from app.services.customer_service_sync import CustomerServiceSyncService
     from app.models.models import CustomerServiceItem
 
@@ -262,8 +262,12 @@ def test_existing_chat_refreshes_buyer_key_on_resync(mock_db, mock_shop_wb, mock
         CustomerServiceItem.id == existing_item.id
     ).first()
 
-    assert updated.buyer_key == "新买家名", \
-        f"buyer_key 应刷新为 '新买家名'，实际: {updated.buyer_key}"
+    # buyer_key 不应再被刷新（跨渠道聚合已废弃）
+    assert updated.buyer_key == "old_buyer", \
+        f"buyer_key 不应改变，应保留 'old_buyer'，实际: {updated.buyer_key}"
+    # reply_sign 应该继续刷新（这个功能仍然需要）
+    assert updated.reply_sign == "token456", \
+        f"reply_sign 应刷新为 'token456'，实际: {updated.reply_sign}"
 
 
 def test_new_chat_writes_reply_sign_on_first_sync(mock_db, mock_shop_wb, mock_product):
@@ -704,6 +708,44 @@ def test_sync_chats_handles_api_error(mock_db, mock_shop_wb, mock_product):
 
         assert result["success"] is False, \
             f"{exc_class} 时 success 应为 False，实际: {result}"
+
+
+
+
+def test_related_items_returns_empty_list(mock_db, mock_shop_wb, mock_product):
+    """跨渠道聚合已禁用，/items/{id}/related 应始终返回空列表"""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.models.models import CustomerServiceItem, User
+
+    # Create a test customer service item
+    item = CustomerServiceItem(
+        shop_id=mock_shop_wb.id,
+        platform="wildberries",
+        channel="chat",
+        external_id="chat-test-001",
+        customer_name="测试买家",
+        title="测试聊天",
+        buyer_key="should_be_ignored",
+        raw_json="{}",
+    )
+    mock_db.add(item)
+    mock_db.commit()
+    mock_db.refresh(item)
+
+    client = TestClient(app)
+
+    # Login as admin
+    resp = client.post("/api/auth/login/", data={"username": "admin", "password": "admin123"})
+    assert resp.status_code == 200
+    token = resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Related items should always return empty
+    resp2 = client.get(f"/api/customer-service/items/{item.id}/related", headers=headers)
+    assert resp2.status_code == 200
+    assert resp2.json() == {"items": []}
+
 
 
 if __name__ == "__main__":

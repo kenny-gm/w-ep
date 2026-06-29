@@ -316,8 +316,8 @@ class CustomerServiceSyncService:
             )
             # 刷新 replySign（支持后续刷新过期/缺失的凭证）
             existing.reply_sign = rec.get("replySign") or rec.get("reply_sign") or existing.reply_sign
-            # 刷新 buyer_key（跨 channel 同买家聚合标识）
-            existing.buyer_key = rec.get("clientName") or rec.get("buyerName") or existing.customer_name or existing.buyer_key or ""
+            # buyer_key 已废弃：WB 无稳定跨渠道买家ID，不再更新
+            # existing.buyer_key = rec.get("clientName") or rec.get("buyerName") or existing.customer_name or existing.buyer_key or ""
             # 刷新 raw_json（保留最新原始数据）
             existing.raw_json = self._json(rec)
             # 刷新外部更新时间
@@ -443,15 +443,15 @@ class CustomerServiceSyncService:
         item.risk_level = self._risk_level(channel, item.rating, item.sla_deadline_at)
         item.priority = item.risk_level
         item.raw_json = self._json(raw)
-        # buyer_key：跨 channel 聚合同一买家
-        if channel in ("feedback", "question"):
-            item.buyer_key = raw.get("userName") or customer_name or item.buyer_key
-        elif channel == "chat":
-            item.buyer_key = raw.get("clientName") or customer_name or item.buyer_key
-        elif channel == "return_claim":
-            item.buyer_key = raw.get("srid") or customer_name or item.buyer_key
-        else:
-            item.buyer_key = customer_name or item.buyer_key
+        # buyer_key 已废弃：WB 无稳定跨渠道买家ID，不再写入
+        # if channel in ("feedback", "question"):
+        #     item.buyer_key = raw.get("userName") or customer_name or item.buyer_key
+        # elif channel == "chat":
+        #     item.buyer_key = raw.get("clientName") or customer_name or item.buyer_key
+        # elif channel == "return_claim":
+        #     item.buyer_key = raw.get("srid") or customer_name or item.buyer_key
+        # else:
+        #     item.buyer_key = customer_name or item.buyer_key
         # reply_sign：聊天回复凭证，支持后续刷新
         if channel == "chat":
             item.reply_sign = raw.get("replySign") or raw.get("reply_sign") or item.reply_sign
