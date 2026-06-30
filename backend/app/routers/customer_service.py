@@ -135,7 +135,7 @@ def get_customer_service_stats(
         CustomerServiceItem.reply_status == "unanswered"
     ).count()
     chat_answered = chat_query.filter(
-        CustomerServiceItem.reply_status.in_(["answered", "replied"])
+        CustomerServiceItem.status == "replied"
     ).count()
 
     # ---- 全局 ----
@@ -186,8 +186,19 @@ def list_customer_service_items(
     if channel != "all":
         query = query.filter(CustomerServiceItem.channel == channel)
     if status != "all":
-        if status == "open":
-            query = query.filter(CustomerServiceItem.status.in_(["open", "pending_internal"]))
+        if status == "unanswered":
+            # 待回复：reply_status=unanswered 且未关闭
+            query = query.filter(
+                CustomerServiceItem.reply_status == "unanswered",
+                CustomerServiceItem.status.notin_(["closed", "archived"]),
+            )
+        elif status == "replied":
+            # 已回复待买家：status=replied
+            query = query.filter(CustomerServiceItem.status == "replied")
+        elif status == "pending_internal":
+            query = query.filter(CustomerServiceItem.status == "pending_internal")
+        elif status == "closed":
+            query = query.filter(CustomerServiceItem.status == "closed")
         else:
             query = query.filter(CustomerServiceItem.status == status)
     if search:
@@ -361,12 +372,21 @@ def reply_customer_service_item(
     client = WBCustomerClient(item.shop.api_token)
     response: Dict[str, Any] = {}
     action_type = "reply"
+    is_edit = item.reply_status == "answered"  # 已回复的走编辑接口
 
     try:
         if item.channel == "question":
-            response = client.answer_question(item.external_id, message)
+            if is_edit:
+                response = client.edit_question_answer(item.external_id, message)
+                action_type = "edit_answer"
+            else:
+                response = client.answer_question(item.external_id, message)
         elif item.channel == "feedback":
-            response = client.answer_feedback(item.external_id, message)
+            if is_edit:
+                response = client.edit_feedback_answer(item.external_id, message)
+                action_type = "edit_answer"
+            else:
+                response = client.answer_feedback(item.external_id, message)
         elif item.channel == "chat":
             reply_sign = item.reply_sign or _raw(item).get("replySign") or _raw(item).get("reply_sign")
             if not reply_sign:
@@ -381,7 +401,6 @@ def reply_customer_service_item(
     except WBCustomerAPIError as exc:
         _record_action(db, item, current_user, action_type, request={"message": message}, success=False, error=str(exc))
         db.commit()
-        # 根据错误类型返回明确的状态码
         err_str = str(exc)
         if "token 无效" in err_str or "401" in err_str:
             raise HTTPException(status_code=401, detail=f"WB API 认证失败: {exc}")
@@ -501,6 +520,76 @@ def answer_return_claim(
     _record_action(db, item, current_user, f"return_{data.action}", request=data.dict(), response=response)
     db.commit()
     return {"success": True, "message": "退货申请已处理"}
+
+
+@router.get("/returns/{item_id}/actions")
+def get_return_claim_actions(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """返回退货申请的可用操作按钮列表"""
+    item = _get_visible_item(db, item_id, current_user)
+    if item.channel != "return_claim":
+        raise HTTPException(status_code=400, detail="不是退货申请")
+    raw = _raw(item)
+    actions = raw.get("actions") or raw.get("availableActions") or []
+    if not actions:
+        return {"actions": []}
+    # 动作映射：WB 返回值 -> (按钮key, 显示文案)
+    KNOWN_ACTIONS = {
+        "approve": ("approve", "批准退货"),
+        "reject": ("reject", "拒绝退货"),
+        "approve_without_return": ("approve_without_return", "批准无需退货"),
+        "approve_with_return": ("approve_with_return", "批准并回收商品"),
+    }
+    buttons = []
+    for action in actions:
+        if isinstance(action, str):
+            key, label = KNOWN_ACTIONS.get(action, (None, None))
+            if key:
+                buttons.append({"action": key, "label": label})
+            else:
+                buttons.append({"action": action, "label": f"WB 返回动作：{action}"})
+        elif isinstance(action, dict):
+            act_str = action.get("action") or action.get("type") or ""
+            key, label = KNOWN_ACTIONS.get(act_str, (None, None))
+            if key:
+                buttons.append({"action": key, "label": label})
+            else:
+                buttons.append({"action": act_str, "label": f"WB 返回动作：{act_str}"})
+    return {"actions": buttons}
+
+
+@router.post("/questions/{item_id}/reject")
+def reject_question(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """拒绝问题"""
+    item = _get_visible_item(db, item_id, current_user)
+    if item.channel != "question":
+        raise HTTPException(status_code=400, detail="不是问答")
+    client = WBCustomerClient(item.shop.api_token)
+    try:
+        response = client.reject_question(item.external_id)
+    except WBCustomerRateLimit as exc:
+        _record_action(db, item, current_user, "reject_question", success=False, error=str(exc))
+        db.commit()
+        raise HTTPException(status_code=429, detail=f"WB API 限流: {exc}")
+    except WBCustomerAPIError as exc:
+        _record_action(db, item, current_user, "reject_question", success=False, error=str(exc))
+        db.commit()
+        raise HTTPException(status_code=502, detail=f"WB API 请求失败: {exc}")
+    item.reply_status = "answered"
+    item.status = "closed"
+    item.closed_by = current_user.username
+    item.closed_at = _now()
+    _touch_handled(item, current_user)
+    _record_action(db, item, current_user, "reject_question", response=response)
+    db.commit()
+    return {"success": True, "message": "问题已拒绝"}
 
 
 @router.post("/items/{item_id}/mark-read")

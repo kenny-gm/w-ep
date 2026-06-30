@@ -69,18 +69,21 @@ class CustomerServiceSyncService:
         sync_log = self._create_sync_log("customer_service_questions")
         try:
             since = int((self._now() - timedelta(days=days)).timestamp())
-            count = 0
+            seen_ids: set = set()
+            total = 0
             for answered in (False, True):
                 for rec in self._paged_feedbacks_api(
                     lambda take, skip: self.client.get_questions(
                         is_answered=answered, take=take, skip=skip, date_from=since
                     )
                 ):
+                    ext_id = str(rec.get("id") or rec.get("questionId"))
+                    seen_ids.add(ext_id)
                     self._upsert_question(rec)
-                    count += 1
+                    total += 1
             self.db.commit()
-            self._finish_sync_log(sync_log, True, count, "WB 问答同步完成")
-            return {"success": True, "count": count}
+            self._finish_sync_log(sync_log, True, total, f"WB 问答同步完成：{total} 条")
+            return {"success": True, "count": total}
         except WBCustomerRateLimit as exc:
             self.db.rollback()
             self._finish_sync_log(sync_log, False, 0, f"WB 问答限流: {exc}")
@@ -122,6 +125,7 @@ class CustomerServiceSyncService:
             cursor = self._get_setting(cursor_key)
 
             total_count = 0
+            seen_ids: set = set()
             page_count = 0
             next_cursor = cursor
 
@@ -129,27 +133,20 @@ class CustomerServiceSyncService:
                 page_count += 1
                 raw = self.client.get_chat_events(next_cursor=next_cursor)
 
-                # 日志记录 WB 原始返回
-                logger.info(
-                    f"[WB Chat Sync][shop {self.shop.id}] 第 {page_count} 页原始返回 keys: "
-                    f"{list(raw.keys()) if isinstance(raw, dict) else type(raw)}"
-                )
                 result_block = raw.get("result") if isinstance(raw, dict) else {}
-                logger.info(
-                    f"[WB Chat Sync][shop {self.shop.id}] 第 {page_count} 页 result keys: "
-                    f"{list(result_block.keys()) if isinstance(result_block, dict) else type(result_block)}"
-                )
-
-                total_events = result_block.get("totalEvents", -1) if isinstance(result_block, dict) else -1
                 events = result_block.get("events", []) if isinstance(result_block, dict) else []
                 next_cursor = result_block.get("next") if isinstance(result_block, dict) else None
 
                 logger.info(
                     f"[WB Chat Sync][shop {self.shop.id}] 第 {page_count} 页: "
-                    f"totalEvents={total_events}, events数量={len(events)}, next={next_cursor}"
+                    f"events数量={len(events)}, next={next_cursor}"
                 )
 
                 for rec in events:
+                    chat_id = rec.get("chatID") or rec.get("chatId") or rec.get("dialogId") or rec.get("rid")
+                    ext_id = str(chat_id or rec.get("eventID") or rec.get("eventId") or rec.get("id") or f"{hash(str(rec))}")
+                    if ext_id not in seen_ids:
+                        seen_ids.add(ext_id)
                     self._upsert_chat_event(rec)
                     total_count += 1
 
@@ -165,8 +162,8 @@ class CustomerServiceSyncService:
             if next_cursor:
                 self._set_setting(cursor_key, str(next_cursor), "WB 买家聊天同步游标")
             self.db.commit()
-            self._finish_sync_log(sync_log, True, total_count, f"WB 买家聊天同步完成，共 {page_count} 页 {total_count} 条")
-            return {"success": True, "count": total_count, "pages": page_count, "next_cursor": next_cursor}
+            self._finish_sync_log(sync_log, True, total_count, f"WB 买家聊天同步完成：{len(seen_ids)} 会话 {total_count} 事件，共 {page_count} 页")
+            return {"success": True, "count": total_count, "sessions": len(seen_ids), "pages": page_count, "next_cursor": next_cursor}
         except WBCustomerRateLimit as exc:
             self.db.rollback()
             self._finish_sync_log(sync_log, False, 0, f"WB 聊天限流: {exc}")
@@ -179,22 +176,32 @@ class CustomerServiceSyncService:
     def sync_return_claims(self) -> Dict[str, Any]:
         sync_log = self._create_sync_log("customer_service_return_claims")
         try:
-            count = 0
-            offset = 0
-            while True:
-                result = self.client.get_return_claims(limit=100, offset=offset, is_archive=False)
-                records = self._extract_records(result, ("claims", "data", "result"))
-                if not records:
-                    break
-                for rec in records:
-                    self._upsert_return_claim(rec)
-                    count += 1
-                if len(records) < 100:
-                    break
-                offset += 100
+            stats = {"active": {"new": 0, "updated": 0, "count": 0}, "archived": {"new": 0, "updated": 0, "count": 0, "closed_transitions": 0}}
+            for is_archive in (False, True):
+                offset = 0
+                while True:
+                    result = self.client.get_return_claims(limit=100, offset=offset, is_archive=is_archive)
+                    records = self._extract_records(result, ("claims", "data", "result"))
+                    if not records:
+                        break
+                    for rec in records:
+                        was_open = self._upsert_return_claim(rec, is_archive=is_archive)
+                        key = "archived" if is_archive else "active"
+                        stats[key]["count"] += 1
+                        if was_open:
+                            stats[key]["new"] += 1
+                        else:
+                            stats[key]["updated"] += 1
+                        if is_archive and was_open:
+                            stats["archived"]["closed_transitions"] += 1
+                    if len(records) < 100:
+                        break
+                    offset += 100
+                    time.sleep(0.5)
             self.db.commit()
-            self._finish_sync_log(sync_log, True, count, "WB 退货申请同步完成")
-            return {"success": True, "count": count}
+            total = stats["active"]["count"] + stats["archived"]["count"]
+            self._finish_sync_log(sync_log, True, total, f"WB 退货申请同步完成：{stats['active']['count']} 活跃 + {stats['archived']['count']} 已归档")
+            return {"success": True, **stats}
         except WBCustomerRateLimit as exc:
             self.db.rollback()
             self._finish_sync_log(sync_log, False, 0, f"WB 退货限流: {exc}")
@@ -207,6 +214,20 @@ class CustomerServiceSyncService:
     def _upsert_question(self, rec: Dict[str, Any]) -> CustomerServiceItem:
         product = rec.get("productDetails") or rec.get("product") or {}
         nm_id = rec.get("nmId") or rec.get("nmID") or product.get("nmId")
+        answer = rec.get("answer") or {}
+        answer_text = answer.get("text") if isinstance(answer, dict) else answer
+        question_status = rec.get("status") or rec.get("state") or ""
+        is_answered = bool(rec.get("isAnswered") or answer_text)
+        # 状态映射：已拒绝/已关闭 -> closed；已回答 -> replied；未处理 -> open
+        if question_status in ("rejected", "closed"):
+            override_status = "closed"
+            override_reply_status = "answered"
+        elif is_answered:
+            override_status = "replied"
+            override_reply_status = "answered"
+        else:
+            override_status = "open"
+            override_reply_status = "unanswered"
         item = self._upsert_item(
             channel="question",
             external_id=str(rec.get("id") or rec.get("questionId")),
@@ -214,11 +235,13 @@ class CustomerServiceSyncService:
             title=rec.get("productName") or product.get("productName") or product.get("name") or "",
             content=rec.get("text") or rec.get("question") or "",
             customer_name=rec.get("userName") or rec.get("username") or "",
-            external_status=rec.get("state") or rec.get("status") or "",
-            is_answered=bool(rec.get("isAnswered") or rec.get("answer")),
+            external_status=question_status,
+            is_answered=is_answered,
             external_created_at=self._parse_dt(rec.get("createdDate") or rec.get("date")),
             external_updated_at=self._parse_dt(rec.get("updatedDate")),
             raw=rec,
+            override_status=override_status,
+            override_reply_status=override_reply_status,
         )
         self._add_message(
             item=item,
@@ -229,8 +252,6 @@ class CustomerServiceSyncService:
             created_at_external=item.external_created_at,
             raw=rec,
         )
-        answer = rec.get("answer") or {}
-        answer_text = answer.get("text") if isinstance(answer, dict) else answer
         if answer_text:
             self._add_message(
                 item=item,
@@ -304,7 +325,7 @@ class CustomerServiceSyncService:
             CustomerServiceItem.external_id == external_id_str,
         ).first()
         if existing:
-            # 已有记录，追加消息，同时刷新主记录关键字段（如 replySign、buyer_key、raw_json）
+            # 已有记录，追加消息
             self._add_message(
                 item=existing,
                 external_message_id=str(event_id or f"{external_id_str}:{created_at or self._now()}"),
@@ -314,15 +335,24 @@ class CustomerServiceSyncService:
                 created_at_external=created_at,
                 raw=rec,
             )
-            # 刷新 replySign（支持后续刷新过期/缺失的凭证）
+            # 刷新 replySign
             existing.reply_sign = rec.get("replySign") or rec.get("reply_sign") or existing.reply_sign
-            # buyer_key 已废弃：WB 无稳定跨渠道买家ID，不再更新
-            # existing.buyer_key = rec.get("clientName") or rec.get("buyerName") or existing.customer_name or existing.buyer_key or ""
-            # 刷新 raw_json（保留最新原始数据）
+            # 刷新 raw_json
             existing.raw_json = self._json(rec)
             # 刷新外部更新时间
             if created_at and created_at > (existing.external_updated_at or existing.external_created_at or self._now()):
                 existing.external_updated_at = created_at
+            # 聊天状态映射规则：
+            # - 买家新消息进来：open/unanswered（即使原状态是 closed/pending_internal，也重开）
+            # - 客服消息进来：replied/answered
+            # - archived 状态不变，除非人工干预
+            if existing.status != "archived":
+                if direction == "buyer":
+                    existing.status = "open"
+                    existing.reply_status = "unanswered"
+                else:  # seller
+                    existing.status = "replied"
+                    existing.reply_status = "answered"
             existing.updated_at = self._now()
             return existing
         item = self._upsert_item(
@@ -349,12 +379,38 @@ class CustomerServiceSyncService:
         )
         return item
 
-    def _upsert_return_claim(self, rec: Dict[str, Any]) -> CustomerServiceItem:
+    def _upsert_return_claim(self, rec: Dict[str, Any], is_archive: bool = False) -> bool:
+        """Upsert 退货申请。返回 was_open: 记录是否在此次同步前为新创建（即此次从 open→closed 的过渡）"""
         claim_id = rec.get("id") or rec.get("claimId")
         nm_id = rec.get("nm_id") or rec.get("nmId") or rec.get("nmID")
         created_at = self._parse_dt(rec.get("dt") or rec.get("created_at") or rec.get("createdAt"))
         sla_deadline = created_at + timedelta(hours=120) if created_at else None
         content = rec.get("user_comment") or rec.get("comment") or rec.get("text") or ""
+        actions = rec.get("actions") or rec.get("availableActions") or []
+
+        # 查旧状态，用于判断 open→closed 过渡
+        existing = self.db.query(CustomerServiceItem).filter(
+            CustomerServiceItem.shop_id == self.shop.id,
+            CustomerServiceItem.platform == "wildberries",
+            CustomerServiceItem.channel == "return_claim",
+            CustomerServiceItem.external_id == str(claim_id),
+        ).first()
+        was_open = (existing is None)  # 新创建=此次同步首次见到
+
+        # 状态映射
+        if is_archive:
+            status = "closed"
+            reply_status = "answered"
+        else:
+            # is_archive=False：待处理退货
+            if actions:
+                status = "open"
+                reply_status = "unanswered"
+            else:
+                # 无 actions = 不可处理，不显示按钮
+                status = "closed"
+                reply_status = "answered"
+
         item = self._upsert_item(
             channel="return_claim",
             external_id=str(claim_id),
@@ -363,12 +419,16 @@ class CustomerServiceSyncService:
             content=content,
             customer_name=rec.get("user_name") or rec.get("userName") or "",
             external_status=rec.get("status") or rec.get("status_ex") or "",
-            is_answered=False,
+            is_answered=(reply_status == "answered"),
             external_created_at=created_at,
             external_updated_at=self._parse_dt(rec.get("dt_update") or rec.get("updated_at") or rec.get("updatedAt")),
             sla_deadline_at=sla_deadline,
             raw=rec,
+            # 覆盖默认状态映射
+            override_status=status,
+            override_reply_status=reply_status,
         )
+        # 保存 actions 数组到 raw_json（已在 raw 中）
         self._add_message(
             item=item,
             external_message_id=f"{item.external_id}:return_claim",
@@ -378,7 +438,7 @@ class CustomerServiceSyncService:
             created_at_external=created_at,
             raw=rec,
         )
-        return item
+        return was_open
 
     def _upsert_item(
         self,
@@ -395,6 +455,8 @@ class CustomerServiceSyncService:
         raw: Dict[str, Any],
         rating: Optional[int] = None,
         sla_deadline_at: Optional[datetime] = None,
+        override_status: Optional[str] = None,
+        override_reply_status: Optional[str] = None,
     ) -> CustomerServiceItem:
         if not external_id or external_id == "None":
             external_id = f"{channel}:{nm_id}:{external_created_at or self._now()}:{hash(content)}"
@@ -436,8 +498,14 @@ class CustomerServiceSyncService:
         item.external_updated_at = external_updated_at or item.external_updated_at
         item.sla_deadline_at = sla_deadline_at or item.sla_deadline_at
         item.is_overdue = bool(item.sla_deadline_at and item.sla_deadline_at < self._now())
-        item.reply_status = "answered" if is_answered else "unanswered"
-        if item.status not in ("pending_internal", "closed", "archived"):
+        # 支持调用方强制覆盖状态（用于退货等特殊映射）
+        if override_reply_status is not None:
+            item.reply_status = override_reply_status
+        else:
+            item.reply_status = "answered" if is_answered else "unanswered"
+        if override_status is not None:
+            item.status = override_status
+        elif item.status not in ("pending_internal", "closed", "archived"):
             item.status = "replied" if is_answered else "open"
         item.issue_type = self._issue_type(channel, item.content, raw)
         item.risk_level = self._risk_level(channel, item.rating, item.sla_deadline_at)

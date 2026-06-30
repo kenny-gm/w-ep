@@ -117,10 +117,10 @@
         <el-option label="退货申请" value="return_claim" />
       </el-select>
       <el-select v-model="filters.status" placeholder="状态" @change="reload">
-        <el-option label="待处理" value="open" />
+        <el-option label="待回复" value="unanswered" />
         <el-option label="全部状态" value="all" />
+        <el-option label="已回复待买家" value="replied" />
         <el-option label="内部处理中" value="pending_internal" />
-        <el-option label="已回复" value="replied" />
         <el-option label="已关闭" value="closed" />
       </el-select>
       <el-button type="primary" @click="reload">刷新</el-button>
@@ -221,12 +221,22 @@
           <div class="return-note">
             买家退货申请需在发起后 120 小时内处理，超时将自动批准。
           </div>
-          <el-button type="success" @click="answerReturn('approve')">同意退货</el-button>
-          <el-button type="danger" @click="answerReturn('reject')">拒绝退货</el-button>
+          <template v-if="returnActions.length">
+            <el-button
+              v-for="btn in returnActions"
+              :key="btn.action"
+              :type="btn.action.includes('reject') ? 'danger' : 'success'"
+              :loading="answeringReturn"
+              @click="answerReturn(btn.action)"
+            >{{ btn.label }}</el-button>
+          </template>
+          <span v-else class="return-no-action">无可用操作（WB 后台已处理）</span>
         </div>
 
         <div v-else class="reply-box">
           <div class="reply-toolbar">
+            <el-button v-if="activeItem.channel === 'question' && activeItem.reply_status !== 'answered'" 
+              type="warning" :loading="rejectingQuestion" @click="rejectQuestion">拒绝问题</el-button>
             <el-button :loading="drafting" @click="generateDraft">生成俄语草稿</el-button>
             <span>AI 只生成草稿，发送前必须人工确认。</span>
           </div>
@@ -234,11 +244,13 @@
             v-model="replyText"
             type="textarea"
             :rows="6"
-            placeholder="请输入俄语回复内容"
+            :placeholder="activeItem.reply_status === 'answered' ? '请输入俄语修改回复内容' : '请输入俄语回复内容'"
           />
           <div class="reply-actions">
             <el-button @click="replyText = ''">清空</el-button>
-            <el-button type="primary" :loading="sending" @click="sendReply">发送回复</el-button>
+            <el-button type="primary" :loading="sending" @click="sendReply">
+              {{ activeItem.reply_status === 'answered' ? '修改回复' : '发送回复' }}
+            </el-button>
           </div>
         </div>
 
@@ -262,11 +274,14 @@ const loading = ref(false)
 const syncing = ref(false)
 const drafting = ref(false)
 const sending = ref(false)
+const answeringReturn = ref(false)
+const rejectingQuestion = ref(false)
 const shops = ref([])
 const items = ref([])
 const activeItem = ref(null)
 const stats = ref({})
 const replyText = ref('')
+const returnActions = ref([])
 
 const filters = reactive({
   search: '',
@@ -342,6 +357,13 @@ async function selectItem(item) {
   const res = await axios.get(`/api/customer-service/items/${item.id}`)
   activeItem.value = res.data
   replyText.value = ''
+  returnActions.value = []
+  if (res.data.channel === 'return_claim') {
+    try {
+      const ar = await axios.get(`/api/customer-service/returns/${item.id}/actions`)
+      returnActions.value = ar.data.actions || []
+    } catch { returnActions.value = [] }
+  }
 }
 
 async function syncCustomerService() {
@@ -439,14 +461,31 @@ async function sendReply() {
 
 async function answerReturn(action) {
   if (!activeItem.value) return
-  const text = action === 'approve' ? '确认同意退货？' : '确认拒绝退货？'
-  await ElMessageBox.confirm(text, '退货处理确认', { type: 'warning' })
-  await axios.post(`/api/customer-service/returns/${activeItem.value.id}/answer`, {
-    action,
-    comment: ''
-  })
-  ElMessage.success('退货申请已处理')
-  await Promise.all([selectItem(activeItem.value), reload()])
+  await ElMessageBox.confirm(`确认执行此操作？`, '退货处理确认', { type: 'warning' })
+  answeringReturn.value = true
+  try {
+    await axios.post(`/api/customer-service/returns/${activeItem.value.id}/answer`, {
+      action,
+      comment: ''
+    })
+    ElMessage.success('退货申请已处理')
+    await Promise.all([selectItem(activeItem.value), reload()])
+  } finally {
+    answeringReturn.value = false
+  }
+}
+
+async function rejectQuestion() {
+  if (!activeItem.value) return
+  await ElMessageBox.confirm('确认拒绝该问题？', '拒绝确认', { type: 'warning' })
+  rejectingQuestion.value = true
+  try {
+    await axios.post(`/api/customer-service/questions/${activeItem.value.id}/reject`)
+    ElMessage.success('问题已拒绝')
+    await Promise.all([selectItem(activeItem.value), reload()])
+  } finally {
+    rejectingQuestion.value = false
+  }
 }
 
 async function handleStatusCommand(status) {

@@ -128,6 +128,24 @@ class WBCustomerClient:
             json_data={"id": question_id, "answer": {"text": text}},
         )
 
+    def reject_question(self, question_id: str) -> Dict[str, Any]:
+        """拒绝问题（关闭）"""
+        return self._request(
+            "PATCH",
+            self.FEEDBACKS_API,
+            "/api/v1/questions",
+            json_data={"id": question_id, "status": "rejected"},
+        )
+
+    def edit_question_answer(self, question_id: str, text: str) -> Dict[str, Any]:
+        """修改已回答的问题答案"""
+        return self._request(
+            "PATCH",
+            self.FEEDBACKS_API,
+            "/api/v1/questions",
+            json_data={"id": question_id, "answer": {"text": text}},
+        )
+
     # ========== Feedbacks ==========
 
     def get_feedbacks(
