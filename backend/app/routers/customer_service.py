@@ -528,45 +528,29 @@ def get_return_claim_actions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """返回退货申请的可用操作按钮列表"""
+    """返回退货申请的可用操作按钮列表，对应WB卖家后台的3个选项"""
     item = _get_visible_item(db, item_id, current_user)
     if item.channel != "return_claim":
         raise HTTPException(status_code=400, detail="不是退货申请")
     raw = _raw(item)
-    actions = raw.get("actions") or raw.get("availableActions") or []
+    actions: list = raw.get("actions") or raw.get("availableActions") or []
     if not actions:
         return {"actions": []}
-    # 动作映射：WB 返回值 -> (按钮key, 显示文案)
-    KNOWN_ACTIONS = {
-        # 批准类
-        "autorefund1": "自动退款（无需退货）",
-        "approve2": "批准退货",
-        "approve_without_return": "批准无需退货",
-        "approve_with_return": "批准并回收商品",
-        # 拒绝类
-        "reject1": "拒绝退货（商品不符）",
-        "reject2": "拒绝退货（超时）",
-        "reject3": "拒绝退货（其他）",
-        "rejectcustom": "拒绝退货",
-        # 兼容旧格式
-        "approve": "批准退货",
-        "reject": "拒绝退货",
-    }
+    # 映射 WB 6个技术 action -> 3个业务按钮
+    # autorefund1 = 批准无需退货
+    # approve2 = 批准并回收商品
+    # reject1/2/3/custom = 拒绝退货（统一发 reject1）
     buttons = []
-    for action in actions:
-        if isinstance(action, str):
-            label = KNOWN_ACTIONS.get(action)
-            if label:
-                buttons.append({"action": action, "label": label})
-            else:
-                buttons.append({"action": action, "label": f"操作：{action}"})
-        elif isinstance(action, dict):
-            act_str = action.get("action") or action.get("type") or ""
-            label = KNOWN_ACTIONS.get(act_str)
-            if label:
-                buttons.append({"action": act_str, "label": label})
-            else:
-                buttons.append({"action": act_str, "label": f"操作：{act_str}"})
+    if "autorefund1" in actions:
+        buttons.append({"action": "autorefund1", "label": "批准无需退货"})
+    if "approve2" in actions:
+        buttons.append({"action": "approve2", "label": "批准并回收商品"})
+    reject_actions = [a for a in actions if a in ("reject1", "reject2", "reject3", "rejectcustom", "reject")]
+    if reject_actions:
+        # 优先用 reject1，其次 rejectcustom，其次第一个
+        chosen = "reject1" if "reject1" in reject_actions else \
+                 "rejectcustom" if "rejectcustom" in reject_actions else reject_actions[0]
+        buttons.append({"action": chosen, "label": "拒绝退货"})
     return {"actions": buttons}
 
 
