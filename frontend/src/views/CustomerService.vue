@@ -170,6 +170,7 @@
               <el-tag v-if="activeItem.channel === 'return_claim'" :type="countdownTag(activeItem)">
                 剩余 {{ formatHours(activeItem.sla_hours_left) }}
               </el-tag>
+              <el-tag type="info" class="external-id-tag">WB #{{ activeItem.external_id?.slice(0, 8) || '-' }}</el-tag>
             </div>
             <h3>{{ activeItem.product_name || activeItem.product_name_ru || activeItem.sku || activeItem.nm_id }}</h3>
             <p>{{ activeItem.shop_name }} / {{ activeItem.owner || activeItem.assigned_owner || '未分配负责人' }}</p>
