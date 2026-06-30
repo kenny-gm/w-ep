@@ -217,6 +217,24 @@
           </div>
         </div>
 
+        <!-- 拒绝原因二级弹窗（置于条件链之外） -->
+        <el-dialog v-model="rejectDialogVisible" title="选择拒绝原因" width="420px" :close-on-click-modal="false">
+          <div class="reject-choice-list">
+            <div class="reject-choice-item" @click="answerReturnConfirm('reject1')">
+              <strong>商品无缺陷，拒绝退款请求</strong>
+              <p>将通知买家：商品检查无问题，无法满足退款要求</p>
+            </div>
+            <div class="reject-choice-item" @click="answerReturnConfirm('reject2')">
+              <strong>申请填写错误或信息不足</strong>
+              <p>将通知买家：申请信息不完整，请重新填写</p>
+            </div>
+            <div class="reject-choice-item" @click="answerReturnConfirm('reject3')">
+              <strong>建议联系售后/服务中心</strong>
+              <p>将通知买家：请前往售后或服务中心处理</p>
+            </div>
+          </div>
+        </el-dialog>
+
         <div v-if="activeItem.channel === 'return_claim'" class="return-actions">
           <div class="return-note">
             买家退货申请需在发起后 120 小时内处理，超时将自动批准。
@@ -225,7 +243,7 @@
             <el-button
               v-for="btn in returnActions"
               :key="btn.action"
-              :type="btn.action.includes('reject') ? 'danger' : 'success'"
+              :type="btn.action === '_reject' ? 'danger' : 'success'"
               :loading="answeringReturn"
               @click="answerReturn(btn.action)"
             >{{ btn.label }}</el-button>
@@ -276,6 +294,7 @@ const drafting = ref(false)
 const sending = ref(false)
 const answeringReturn = ref(false)
 const rejectingQuestion = ref(false)
+const rejectDialogVisible = ref(false)
 const shops = ref([])
 const items = ref([])
 const activeItem = ref(null)
@@ -461,29 +480,28 @@ async function sendReply() {
 
 async function answerReturn(action) {
   if (!activeItem.value) return
-  let comment = ''
-  if (action === 'rejectcustom') {
-    // 拒绝并自定义回复：弹出文本框
-    const { value } = await ElMessageBox.prompt(
-      '请输入要发送给买家的拒绝原因（俄语）',
-      '自定义拒绝回复',
-      { confirmButtonText: '确认发送', cancelButtonText: '取消', inputType: 'textarea' }
-    )
-    if (!value || !value.trim()) {
-      ElMessage.warning('请填写拒绝原因')
-      return
-    }
-    comment = value.trim()
-  } else {
-    const labelMap = {
-      autorefund1: '批准无需退货',
-      approve2: '批准并回收商品',
-      reject1: '拒绝退货：商品无缺陷',
-      reject2: '拒绝退货：申请填写错误',
-      reject3: '拒绝退货：请买家联系售后',
-    }
-    await ElMessageBox.confirm(`确认执行「${labelMap[action] || action}」？`, '退货处理确认', { type: 'warning' })
+
+  // 拒绝退货：弹出二级选择弹窗
+  if (action === '_reject') {
+    rejectDialogVisible.value = true
+    return
   }
+
+  // 批准类直接确认
+  const labelMap = {
+    autorefund1: '批准无需退货',
+    approve2: '批准并回收商品',
+  }
+  await ElMessageBox.confirm(`确认执行「${labelMap[action] || action}」？`, '退货处理确认', { type: 'warning' })
+  await doAnswerReturn(action, '')
+}
+
+async function answerReturnConfirm(rejectAction) {
+  rejectDialogVisible.value = false
+  await doAnswerReturn(rejectAction, '')
+}
+
+async function doAnswerReturn(action, comment) {
   answeringReturn.value = true
   try {
     await axios.post(`/api/customer-service/returns/${activeItem.value.id}/answer`, {
@@ -880,6 +898,37 @@ function formatHours(hours) {
   margin-bottom: 12px;
   color: #b45309;
   font-weight: 600;
+}
+
+.reject-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reject-choice-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.reject-choice-item:hover {
+  border-color: #409eff;
+  background: #f0f7ff;
+}
+
+.reject-choice-item strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #303133;
+}
+
+.reject-choice-item p {
+  margin: 0;
+  font-size: 13px;
+  color: #909399;
 }
 
 .reply-toolbar {
