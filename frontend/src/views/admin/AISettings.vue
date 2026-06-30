@@ -22,26 +22,26 @@
             <el-tag :type="cfg.api_key_configured ? 'success' : 'danger'">
               {{ cfg.api_key_configured ? '✅ 已配置' : '❌ 未配置' }}
             </el-tag>
-            <span class="field-hint">在服务器 .env 文件中配置 OPENAI_API_KEY</span>
+            <span class="field-hint">在服务器 .env 中配置 AI_API_KEY（MiniMax / OpenAI 均可）</span>
           </el-form-item>
 
           <el-divider content-position="left">模型配置</el-divider>
 
           <el-form-item label="服务商">
             <el-select v-model="cfg.provider" :disabled="saving" style="width: 200px">
-              <el-option value="openai" label="OpenAI（兼容）"></el-option>
-              <el-option value="deepseek" label="DeepSeek"></el-option>
-              <el-option value="azure" label="Azure OpenAI"></el-option>
+              <el-option value="openai" label="OpenAI"></el-option>
+              <el-option value="openai_compatible" label="OpenAI 兼容（其他）"></el-option>
+              <el-option value="minimax" label="MiniMax（国内版）"></el-option>
             </el-select>
           </el-form-item>
 
           <el-form-item label="Base URL">
             <el-input v-model="cfg.base_url" :disabled="saving" style="width: 360px" placeholder="https://api.openai.com/v1" />
-            <span class="field-hint">OpenAI 兼容接口地址</span>
+            <span class="field-hint">MiniMax 国内版填 https://api.minimaxi.com/v1</span>
           </el-form-item>
 
           <el-form-item label="模型名称">
-            <el-input v-model="cfg.model" :disabled="saving" style="width: 240px" placeholder="gpt-4.1-mini" />
+            <el-input v-model="cfg.model" :disabled="saving" style="width: 240px" placeholder="MiniMax-M3 / gpt-4o-mini" />
           </el-form-item>
 
           <el-form-item label="超时时间（秒）">

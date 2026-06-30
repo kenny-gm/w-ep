@@ -1,6 +1,7 @@
 """
 AI Client - OpenAI 兼容接口调用
 
+支持 OpenAI / MiniMax / OpenAI-Compatible providers。
 API Key 只从环境变量读取，禁止日志打印 Key。
 非密钥配置优先读 SystemSetting，没有则读 settings。
 """
@@ -51,29 +52,52 @@ class AIClient:
             "max_tokens": int(_setting(self._db, "ai.max_tokens", str(settings.AI_MAX_TOKENS))),
         }
 
+    def _build_chat_url(self, base_url: str, provider: str) -> str:
+        """构造 chat completions URL，不重复拼接"""
+        base = (base_url or "").rstrip("/")
+        # 如果已经是完整 endpoint（含 /chat/completions），直接返回
+        if "/chat/completions" in base:
+            return base
+        # 否则追加 path
+        path = settings.AI_CHAT_COMPLETIONS_PATH.lstrip("/")
+        return f"{base}/{path}"
+
     def _build_headers(self) -> dict:
         return {
             "Authorization": f"Bearer {settings.AI_API_KEY}",
             "Content-Type": "application/json",
         }
 
-    def _chat_payload(
+    def _openai_compatible_request(
         self,
+        url: str,
+        model: str,
         system_prompt: str,
         user_prompt: str,
-        temperature: Optional[float],
-        max_tokens: Optional[int],
-    ) -> dict:
-        eff = self.get_effective_config()
-        return {
-            "model": eff["model"],
+        temperature: float,
+        max_tokens: int,
+        timeout: int,
+    ) -> str:
+        """通用 OpenAI 兼容请求，返回文本内容"""
+        payload = {
+            "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": temperature if temperature is not None else 0.2,
-            "max_tokens": max_tokens or eff.get("max_tokens", 1200),
+            "temperature": temperature,
+            "max_tokens": max_tokens,
         }
+        resp = requests.post(
+            url,
+            headers=self._build_headers(),
+            json=payload,
+            timeout=timeout,
+        )
+        if resp.status_code != 200:
+            raise AIClientError(f"AI API 错误 [{resp.status_code}]: {resp.text[:300]}")
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
 
     def chat_text(
         self,
@@ -89,19 +113,19 @@ class AIClient:
             raise AIClientDisabled("AI 未启用")
 
         eff = self.get_effective_config()
-        payload = self._chat_payload(system_prompt, user_prompt, temperature, max_tokens)
+        url = self._build_chat_url(eff["base_url"], eff["provider"])
+        temperature = temperature if temperature is not None else 0.2
+        max_tokens = max_tokens or eff.get("max_tokens", 1200)
 
-        resp = requests.post(
-            f"{eff['base_url'].rstrip('/v1')}/v1/chat/completions",
-            headers=self._build_headers(),
-            json=payload,
-            timeout=eff["timeout"],
+        return self._openai_compatible_request(
+            url,
+            eff["model"],
+            system_prompt,
+            user_prompt,
+            temperature,
+            max_tokens,
+            eff["timeout"],
         )
-        if resp.status_code != 200:
-            raise AIClientError(f"AI API 错误 [{resp.status_code}]: {resp.text[:300]}")
-
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
 
     def chat_json(
         self,
@@ -110,7 +134,7 @@ class AIClient:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> dict:
-        """解析 JSON 输出（支持 ```json fenced block）"""
+        """解析 JSON 输出（支持 ```json fenced block 和纯 JSON）"""
         text = self.chat_text(system_prompt, user_prompt, temperature, max_tokens)
         # 去掉 ```json ... ``` 或 ``` ... ``` 包装
         text = re.sub(r"^```json\s*", "", text.strip())
@@ -129,24 +153,20 @@ class AIClient:
             return {"success": False, "error": "AI_API_KEY 未配置"}
         try:
             eff = self.get_effective_config()
-            payload = self._chat_payload(
+            url = self._build_chat_url(eff["base_url"], eff["provider"])
+            content = self._openai_compatible_request(
+                url,
+                eff["model"],
                 "You are a helpful assistant.",
-                "Reply with exactly: {\"ok\": true}",
+                'Reply with exactly: {"ok": true}',
                 0.1,
                 20,
+                eff["timeout"],
             )
-            resp = requests.post(
-                f"{eff['base_url'].rstrip('/v1')}/v1/chat/completions",
-                headers=self._build_headers(),
-                json=payload,
-                timeout=eff["timeout"],
-            )
-            if resp.status_code != 200:
-                return {"success": False, "error": f"API 错误 [{resp.status_code}]: {resp.text[:200]}"}
-            data = resp.json()
-            model = data.get("model", "?")
-            return {"success": True, "model": model}
+            return {"success": True, "model": eff["model"], "content": content}
         except requests.exceptions.Timeout:
             return {"success": False, "error": "请求超时"}
+        except AIClientError as e:
+            return {"success": False, "error": str(e)[:200]}
         except Exception as e:
             return {"success": False, "error": str(e)[:200]}

@@ -285,3 +285,157 @@ def test_no_legacy_ai_names_in_new_code():
         assert "AIReport" not in content, f"{fpath} 包含 AIReport"
         assert "ai_configs" not in content, f"{fpath} 包含 ai_configs"
         assert "ai_reports" not in content, f"{fpath} 包含 ai_reports"
+
+
+# ============================================================
+# Phase 1.1: MiniMax Provider 测试
+# ============================================================
+
+def test_build_chat_url_minimax():
+    """base_url=https://api.minimaxi.com/v1 → 拼接 /chat/completions"""
+    from app.services.ai_client import AIClient
+
+    class FakeDB:
+        def query(self, *a):
+            return self
+        def filter(self, *a):
+            return self
+        def first(self):
+            return None
+
+    client = AIClient(FakeDB())
+    url = client._build_chat_url("https://api.minimaxi.com/v1", "minimax")
+    assert url == "https://api.minimaxi.com/v1/chat/completions", f"Got: {url}"
+
+
+def test_build_chat_url_full_endpoint():
+    """base_url 已是完整 endpoint，不重复拼接"""
+    from app.services.ai_client import AIClient
+
+    class FakeDB:
+        def query(self, *a):
+            return self
+        def filter(self, *a):
+            return self
+        def first(self):
+            return None
+
+    client = AIClient(FakeDB())
+    url = client._build_chat_url("https://api.minimaxi.com/v1/chat/completions", "minimax")
+    assert url == "https://api.minimaxi.com/v1/chat/completions", f"Got: {url}"
+
+
+def test_build_chat_url_openai():
+    """openai provider 使用默认 base_url"""
+    from app.services.ai_client import AIClient
+
+    class FakeDB:
+        def query(self, *a):
+            return self
+        def filter(self, *a):
+            return self
+        def first(self):
+            return None
+
+    client = AIClient(FakeDB())
+    url = client._build_chat_url("https://api.openai.com/v1", "openai")
+    assert url == "https://api.openai.com/v1/chat/completions", f"Got: {url}"
+
+
+def test_openai_compatible_request_payload_model():
+    """MiniMax-M3 模型时 payload.model 正确"""
+    from app.services.ai_client import AIClient
+
+    class FakeDB:
+        def query(self, *a):
+            return self
+        def filter(self, *a):
+            return self
+        def first(self):
+            return None
+
+    captured = {}
+    def fake_post(url, headers, json, timeout):
+        class R:
+            status_code = 200
+            def json(self):
+                captured["url"] = url
+                captured["payload"] = json
+                return {"choices": [{"message": {"content": "ok"}}]}
+        return R()
+
+    client = AIClient(FakeDB())
+    with patch("requests.post", fake_post):
+        client._openai_compatible_request(
+            "https://api.minimaxi.com/v1/chat/completions",
+            "MiniMax-M3",
+            "sys",
+            "user",
+            0.2,
+            1200,
+            60,
+        )
+
+    assert captured["payload"]["model"] == "MiniMax-M3", f"Got: {captured['payload']['model']}"
+    assert captured["url"] == "https://api.minimaxi.com/v1/chat/completions"
+
+
+def test_test_connection_minimax_no_key():
+    """未配置 API Key 时 test_connection 返回明确错误（不是 500）"""
+    from app.services.ai_client import AIClient, AIClientDisabled
+    from app import config
+
+    class FakeDB:
+        def query(self, *a):
+            return self
+        def filter(self, *a):
+            return self
+        def first(self):
+            return None
+
+    client = AIClient(FakeDB())
+    try:
+        result = client.test_connection()
+        # 没有配置 API Key 时返回 success=False，错误信息明确（不是 500）
+        assert result["success"] == False
+        assert "API" in result["error"] or "未" in result["error"]
+    except AIClientDisabled as e:
+        # 没有 API_KEY 时直接抛异常也是预期行为
+        assert "API" in str(e) or "未" in str(e)
+
+
+def test_chat_json_minimax_fenced_response():
+    """MiniMax 返回 ```json fenced block 时 chat_json 能正确解析"""
+    from app.services.ai_client import AIClient
+    from app import config
+
+    class FakeDB:
+        def query(self, *a):
+            return self
+        def filter(self, *a):
+            return self
+        def first(self):
+            return None
+
+    def fake_post(url, headers, json=None, timeout=None):
+        class R:
+            status_code = 200
+            def json(self):
+                return {"choices": [{"message": {"content": '```json\n{"diagnosis": ["质量没问题"]}\n```'}}]}
+        return R()
+
+    client = AIClient(FakeDB())
+    # 同时 patch API_KEY 和 is_enabled，避免在检查点抛异常
+    with patch.object(config.settings, "AI_API_KEY", "fake-key"):
+        with patch.object(client, "is_enabled", return_value=True):
+            with patch("requests.post", fake_post):
+                result = client.chat_json("sys", "user", 0.2, 1200)
+    assert result == {"diagnosis": ["质量没问题"]}
+
+
+def test_provider_minimax_saved_and_returned():
+    """provider=minimax 可以保存并正确返回"""
+    from app.routers.ai_settings import AISettingsPatch
+    patch_data = AISettingsPatch(provider="minimax", model="MiniMax-M3")
+    assert patch_data.provider == "minimax"
+    assert patch_data.model == "MiniMax-M3"

@@ -70,9 +70,10 @@ class Settings(BaseSettings):
     AI_PROVIDER: str = "openai"
     AI_API_KEY: Optional[str] = None
     AI_BASE_URL: str = "https://api.openai.com/v1"
-    AI_MODEL: str = "gpt-4.1-mini"
+    AI_MODEL: str = "gpt-4o-mini"
     AI_TIMEOUT: int = 60
     AI_MAX_TOKENS: int = 1200
+    AI_CHAT_COMPLETIONS_PATH: str = "/chat/completions"
 
     class Config:
         env_file = ".env"
