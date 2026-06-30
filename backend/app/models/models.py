@@ -314,6 +314,36 @@ class MenuItem(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")), onupdate=lambda ctx: datetime.now(ZoneInfo("Asia/Shanghai")))
 
 
+class AIPromptTemplate(Base):
+    """AI Prompt 模板，支持版本管理"""
+    __tablename__ = "ai_prompt_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    template_key = Column(String(80), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, default="")
+    system_prompt = Column(Text, nullable=False)
+    user_prompt_template = Column(Text, nullable=False)
+    output_schema_json = Column(Text, default="{}")
+    temperature = Column(Float, default=0.2)
+    max_tokens = Column(Integer, default=1200)
+    is_active = Column(Boolean, default=True)
+    version = Column(Integer, default=1)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")),
+        onupdate=lambda ctx: datetime.now(ZoneInfo("Asia/Shanghai")),
+    )
+
+    __table_args__ = (
+        Index("ix_ai_prompt_template_key_version", "template_key", "version", unique=True),
+        Index("ix_ai_prompt_template_active", "template_key", "is_active"),
+    )
+
+
 class SyncJob(Base):
     """异步同步任务"""
     __tablename__ = "sync_jobs"

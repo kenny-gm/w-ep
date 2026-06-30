@@ -64,7 +64,16 @@ class Settings(BaseSettings):
     API_LOG_FILE: str = "wb_api.log"
     LOG_MAX_SIZE: int = 10
     LOG_BACKUP_COUNT: int = 5
-    
+
+    # ========== AI 配置 ==========
+    AI_ENABLED: bool = False
+    AI_PROVIDER: str = "openai"
+    AI_API_KEY: Optional[str] = None
+    AI_BASE_URL: str = "https://api.openai.com/v1"
+    AI_MODEL: str = "gpt-4.1-mini"
+    AI_TIMEOUT: int = 60
+    AI_MAX_TOKENS: int = 1200
+
     class Config:
         env_file = ".env"
         case_sensitive = True

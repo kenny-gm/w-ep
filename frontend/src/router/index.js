@@ -99,6 +99,18 @@ const routes = [
             name: 'MetricThresholds',
             component: () => import('../views/admin/MetricThresholds.vue'),
             meta: { title: '预警阈值' }
+          },
+          {
+            path: 'ai-settings',
+            name: 'AISettings',
+            component: () => import('../views/admin/AISettings.vue'),
+            meta: { title: 'AI 大模型设置' }
+          },
+          {
+            path: 'ai-prompts',
+            name: 'AIPrompts',
+            component: () => import('../views/admin/AIPrompts.vue'),
+            meta: { title: 'AI 提示词模板' }
           }
         ]
       },

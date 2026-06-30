@@ -26,10 +26,15 @@ migrate_add_buyer_key_and_reply_sign()  # 幂等，重复执行无影响
 from migrations.fix_customer_service_items_columns import migrate_fix_customer_service_items_columns
 migrate_fix_customer_service_items_columns()  # 幂等，重复执行无影响
 
+# 迁移：新增 ai_prompt_templates 表和默认 AI 设置
+from migrations.add_ai_prompt_templates import migrate_add_ai_prompt_templates
+migrate_add_ai_prompt_templates()  # 幂等，重复执行无影响
+
 # 导入路由
 from app.routers import auth, dashboard, products, shops, admin, users, inventory, orders, ads, customer_service
 from app.routers import metric_thresholds
 from app.routers import alerts, operation_logs, effect_analysis
+from app.routers import ai_settings, ai_prompts
 
 
 # 导入所有模型（确保create_all能创建所有表）
@@ -37,7 +42,8 @@ from app.models.models import (
     User, Shop, Product, ProductPermission, InventoryRecord, InventorySnapshot,
     Order, OrderItem, AdRecord, SystemSetting, UISetting, MenuItem, SyncLog,
     MetricHistory, OperationLog, Alert, AlertRule,
-    CustomerServiceItem, CustomerServiceMessage, CustomerServiceAction
+    CustomerServiceItem, CustomerServiceMessage, CustomerServiceAction,
+    AIPromptTemplate
 )
 
 # 创建数据库表
@@ -100,6 +106,8 @@ app.include_router(metric_thresholds.router)
 app.include_router(alerts.router)
 app.include_router(operation_logs.router)
 app.include_router(effect_analysis.router)
+app.include_router(ai_settings.router)
+app.include_router(ai_prompts.router)
 
 
 @app.get("/")

@@ -19,6 +19,12 @@
       <el-tab-pane label="⚙️ 系统设置" name="settings">
         <router-view v-if="activeTab === 'settings'" />
       </el-tab-pane>
+      <el-tab-pane label="🤖 AI 设置" name="ai-settings">
+        <router-view v-if="activeTab === 'ai-settings'" />
+      </el-tab-pane>
+      <el-tab-pane label="💬 Prompt 模板" name="ai-prompts">
+        <router-view v-if="activeTab === 'ai-prompts'" />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -43,6 +49,8 @@ watch(() => route.path, (path) => {
   else if (path.includes('/admin/thresholds')) activeTab.value = 'thresholds'
   else if (path.includes('/admin/ui')) activeTab.value = 'ui'
   else if (path.includes('/admin/settings')) activeTab.value = 'settings'
+  else if (path.includes('/admin/ai-settings')) activeTab.value = 'ai-settings'
+  else if (path.includes('/admin/ai-prompts')) activeTab.value = 'ai-prompts'
 }, { immediate: true })
 </script>
 
