@@ -538,26 +538,35 @@ def get_return_claim_actions(
         return {"actions": []}
     # 动作映射：WB 返回值 -> (按钮key, 显示文案)
     KNOWN_ACTIONS = {
-        "approve": ("approve", "批准退货"),
-        "reject": ("reject", "拒绝退货"),
-        "approve_without_return": ("approve_without_return", "批准无需退货"),
-        "approve_with_return": ("approve_with_return", "批准并回收商品"),
+        # 批准类
+        "autorefund1": "自动退款（无需退货）",
+        "approve2": "批准退货",
+        "approve_without_return": "批准无需退货",
+        "approve_with_return": "批准并回收商品",
+        # 拒绝类
+        "reject1": "拒绝退货（商品不符）",
+        "reject2": "拒绝退货（超时）",
+        "reject3": "拒绝退货（其他）",
+        "rejectcustom": "拒绝退货",
+        # 兼容旧格式
+        "approve": "批准退货",
+        "reject": "拒绝退货",
     }
     buttons = []
     for action in actions:
         if isinstance(action, str):
-            key, label = KNOWN_ACTIONS.get(action, (None, None))
-            if key:
-                buttons.append({"action": key, "label": label})
+            label = KNOWN_ACTIONS.get(action)
+            if label:
+                buttons.append({"action": action, "label": label})
             else:
-                buttons.append({"action": action, "label": f"WB 返回动作：{action}"})
+                buttons.append({"action": action, "label": f"操作：{action}"})
         elif isinstance(action, dict):
             act_str = action.get("action") or action.get("type") or ""
-            key, label = KNOWN_ACTIONS.get(act_str, (None, None))
-            if key:
-                buttons.append({"action": key, "label": label})
+            label = KNOWN_ACTIONS.get(act_str)
+            if label:
+                buttons.append({"action": act_str, "label": label})
             else:
-                buttons.append({"action": act_str, "label": f"WB 返回动作：{act_str}"})
+                buttons.append({"action": act_str, "label": f"操作：{act_str}"})
     return {"actions": buttons}
 
 
