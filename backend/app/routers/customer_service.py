@@ -359,12 +359,12 @@ def generate_ai_reply_draft(
         is_return_related = item.channel == "return_claim" or "return" in raw
 
         variables = {
-            "channel": item.channel or "",
+            "channel": str(item.channel) if item.channel is not None else "",
             "shop_name": item.shop.name if item.shop else "",
             "product_name": item.product_name or item.title or "",
-            "rating": item.rating or "",
-            "status": item.status or "",
-            "reply_status": item.reply_status or "",
+            "rating": str(item.rating) if item.rating is not None else "",
+            "status": str(item.status) if item.status is not None else "",
+            "reply_status": str(item.reply_status) if item.reply_status is not None else "",
             "is_archived": str(bool(getattr(item, "is_archived", False))),
             "is_return_related": str(is_return_related),
             "content": item.content or item.title or "",
@@ -391,8 +391,8 @@ def generate_ai_reply_draft(
             raise HTTPException(status_code=400, detail="AI 草稿未以 Здравствуйте 开头，已拦截")
         # 拦截内部商品编码
         blocked_tokens = [
-            str(item.nm_id or ""),
-            str(item.sku or ""),
+            str(item.nm_id) if item.nm_id else "",
+            str(item.sku) if item.sku else "",
         ]
         for token in blocked_tokens:
             if token and len(token) >= 4 and token.lower() in draft.lower():
