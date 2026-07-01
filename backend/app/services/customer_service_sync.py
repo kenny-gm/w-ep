@@ -118,11 +118,11 @@ class CustomerServiceSyncService:
             self._finish_sync_log(sync_log, False, 0, str(exc))
             return {"success": False, "error": str(exc)}
 
-    def sync_chats(self) -> Dict[str, Any]:
+    def sync_chats(self, force_full_sync: bool = False) -> Dict[str, Any]:
         sync_log = self._create_sync_log("customer_service_chats")
         try:
             cursor_key = f"customer_service_chat_cursor:{self.shop.id}"
-            cursor = self._get_setting(cursor_key)
+            cursor = None if force_full_sync else self._get_setting(cursor_key)
 
             total_count = 0
             seen_ids: set = set()
@@ -685,7 +685,8 @@ class CustomerServiceSyncService:
             # WB addTimestamp 是 13 位毫秒（> 1e11），除以 1000 转秒
             if value > 1e11:
                 value = value / 1000
-            return datetime.fromtimestamp(value, SHANGHAI_TZ)
+            # 统一返回 naive datetime（DB 存储格式），避免 aware vs naive 比较错误
+            return datetime.fromtimestamp(value, SHANGHAI_TZ).replace(tzinfo=None)
         if isinstance(value, str):
             text = value.strip()
             if not text:

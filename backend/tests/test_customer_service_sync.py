@@ -52,7 +52,7 @@ def mock_db():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    engine = create_engine("sqlite:///:memory:", echo=False)
+    engine = create_engine("sqlite:///:memory:", echo=False, connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     db = Session()
@@ -718,7 +718,18 @@ def test_related_items_returns_empty_list(mock_db, mock_shop_wb, mock_product):
     from app.main import app
     from app.models.models import CustomerServiceItem, User
 
-    # Create a test customer service item
+    # 创建测试用户
+    test_user = User(
+        username="test_admin",
+        hashed_password="$2b$12$dummy",
+        is_active=True,
+        role="admin",
+    )
+    mock_db.add(test_user)
+    mock_db.commit()
+    mock_db.refresh(test_user)
+
+    # 创建一个测试客服事项
     item = CustomerServiceItem(
         shop_id=mock_shop_wb.id,
         platform="wildberries",
@@ -733,20 +744,17 @@ def test_related_items_returns_empty_list(mock_db, mock_shop_wb, mock_product):
     mock_db.commit()
     mock_db.refresh(item)
 
-    client = TestClient(app)
+    # Override 认证依赖，使用测试用户
+    from app.routers.auth import get_current_user
+    app.dependency_overrides[get_current_user] = lambda: test_user
 
-    # Login as admin
-    resp = client.post("/api/auth/login/", data={"username": "admin", "password": "admin123"})
-    assert resp.status_code == 200
-    token = resp.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.get(f"/api/customer-service/items/{item.id}/related")
+    assert resp.status_code == 200, f"expected 200, got {resp.status_code}: {resp.text}"
+    assert resp.json() == {"items": []}
 
-    # Related items should always return empty
-    resp2 = client.get(f"/api/customer-service/items/{item.id}/related", headers=headers)
-    assert resp2.status_code == 200
-    assert resp2.json() == {"items": []}
+    # 无权访问场景：item 不存在时返回 404
+    resp2 = client.get("/api/customer-service/items/99999/related")
+    assert resp2.status_code == 404
 
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    app.dependency_overrides.clear()

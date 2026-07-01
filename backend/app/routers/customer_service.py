@@ -65,6 +65,7 @@ class SyncRequest(BaseModel):
     shop_id: Optional[int] = None
     channel: str = "all"  # all/questions/feedbacks/chats/return_claims
     days: int = 30
+    force_full_sync: bool = False  # 强制从头同步（清除聊天 cursor）
 
 
 @router.get("/stats")
@@ -290,7 +291,7 @@ def sync_customer_service(
         db.commit()
         db.refresh(sync_log)
         log_ids.append(sync_log.id)
-        background_tasks.add_task(_run_customer_service_sync_task, shop.id, data.channel, data.days, sync_log.id)
+        background_tasks.add_task(_run_customer_service_sync_task, shop.id, data.channel, data.days, sync_log.id, data.force_full_sync)
     return {
         "success": True,
         "status": "queued",
@@ -749,7 +750,7 @@ def proxy_customer_service_attachment(
     )
 
 
-def _run_customer_service_sync_task(shop_id: int, channel: str, days: int, log_id: int) -> None:
+def _run_customer_service_sync_task(shop_id: int, channel: str, days: int, log_id: int, force_full_sync: bool = False) -> None:
     db = SessionLocal()
     try:
         shop = db.query(Shop).filter(Shop.id == shop_id, Shop.is_active == True).first()
@@ -763,7 +764,7 @@ def _run_customer_service_sync_task(shop_id: int, channel: str, days: int, log_i
             elif channel == "feedbacks":
                 result["feedbacks"] = service.sync_feedbacks(days=days)
             elif channel == "chats":
-                result["chats"] = service.sync_chats()
+                result["chats"] = service.sync_chats(force_full_sync=force_full_sync)
             elif channel == "return_claims":
                 result["return_claims"] = service.sync_return_claims()
             else:
