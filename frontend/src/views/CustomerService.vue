@@ -956,7 +956,8 @@ function formatHours(hours) {
 
 .detail {
   padding: 16px;
-  overflow: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .detail.empty {
