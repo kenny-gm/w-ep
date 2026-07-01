@@ -54,6 +54,8 @@
       <div class="metric-card"><div class="metric-header"><div class="metric-label"><el-icon><PieChart /></el-icon> 广告占比</div><div class="metric-change" :class="summary.ad_ratio_change >= 0 ? 'negative' : 'positive'">{{ formatChange(summary.ad_ratio_change) }}</div></div><div class="metric-value">{{ summary.avg_ad_ratio }}%</div><div class="chart-area" v-if="hasDateRange && dailyAdRatio.length"><svg class="line-chart" viewBox="0 0 100 50" preserveAspectRatio="none"><path :d="getAreaPath(dailyAdRatio, maxAdRatio)" fill="#ec489a" fill-opacity="0.2" /><polyline :points="getLinePoints(dailyAdRatio, maxAdRatio)" fill="none" stroke="#ec489a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
     </div>
     <ProductSalesTable 
+      :items="productList"
+      :loading="loading"
       :start-date="filters.start_date" 
       :end-date="filters.end_date" 
       :selected-shop="filters.shopId" 
@@ -287,8 +289,15 @@ function formatNumber(n) { if(!n) return '0'; return parseFloat(n.toString().rep
 function formatChange(c) { return c || c === 0 ? (c >= 0 ? '+' : '') + c.toFixed(1) + '%' : '0%' }
 function getRateClass(rate, metric) { const t = thresholds[metric]; if (!t || !rate) return ''; return rate <= t.danger_threshold ? 'rate-danger' : rate <= t.warning_threshold ? 'rate-warning' : 'rate-success' }
 
-watch(() => [filters.start_date, filters.end_date, filters.shopId, filters.owner, filters.productId], () => { fetchData() })
-onMounted(() => { fetchShops(); fetchProducts(); fetchOwners(); fetchThresholds(); setQuickDate('yesterday'); fetchData() })
+// initialized 防止 setQuickDate 触发 watch 与 onMounted 手动调用重复请求
+const initialized = ref(false)
+watch(() => [filters.start_date, filters.end_date, filters.shopId, filters.owner, filters.productId], () => { if (initialized.value) fetchData() })
+onMounted(async () => {
+  await Promise.all([fetchShops(), fetchProducts(), fetchOwners(), fetchThresholds()])
+  setQuickDate('yesterday')
+  initialized.value = true
+  await fetchData()
+})
 </script>
 
 <style scoped>

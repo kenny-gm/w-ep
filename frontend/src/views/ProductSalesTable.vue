@@ -125,6 +125,8 @@ import { Document } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const props = defineProps({
+  items: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
   startDate: { type: String, default: '' },
   endDate: { type: String, default: '' },
   selectedShop: { type: [String, Number], default: '' },
@@ -521,15 +523,24 @@ async function fetchData() {
   }
 }
 
+watch(
+  () => props.items,
+  (items) => {
+    allData.value = items || []
+    expandedIds.value = new Set()
+    shopDailyData.value = {}
+  },
+  { immediate: true }
+)
+
 watch([() => props.startDate, () => props.endDate, () => props.selectedShop, () => props.selectedOwner, () => props.selectedProduct], () => {
-  fetchData()
-  prefetchLogsForDateRange()
+  setTimeout(() => prefetchLogsForDateRange(), 0)
 })
 
 onMounted(() => {
   fetchShops()
   fetchThresholds()
-  fetchData()
+  setTimeout(() => prefetchLogsForDateRange(), 0)
 })
 
 async function prefetchLogsForDateRange() {
