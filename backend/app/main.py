@@ -30,6 +30,10 @@ migrate_fix_customer_service_items_columns()  # 幂等，重复执行无影响
 from migrations.add_ai_prompt_templates import migrate_add_ai_prompt_templates
 migrate_add_ai_prompt_templates()  # 幂等，重复执行无影响
 
+# 迁移：新增客服翻译字段
+from migrations.add_customer_translation_fields import migrate_add_customer_translation_fields
+migrate_add_customer_translation_fields()  # 幂等，重复执行无影响
+
 # 导入路由
 from app.routers import auth, dashboard, products, shops, admin, users, inventory, orders, ads, customer_service
 from app.routers import metric_thresholds

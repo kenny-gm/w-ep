@@ -144,7 +144,8 @@
             <strong>{{ item.product_name || item.product_name_ru || item.sku || item.nm_id || '未匹配产品' }}</strong>
             <span v-if="item.channel === 'feedback' && item.rating" class="rating-stars">{{ item.rating_display || '' }}</span>
           </div>
-          <div class="content-line">{{ item.content || '无文本内容' }}</div>
+          <div class="content-line">{{ item.content_zh || item.content || '无文本内容' }}</div>
+          <div v-if="item.content_zh" class="original-hint">已翻译，详情可查看俄语原文</div>
           <div class="meta-line">
             <span>{{ item.shop_name }}</span>
             <span>{{ item.owner || item.assigned_owner || '未分配' }}</span>
@@ -185,7 +186,19 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
+          <el-button :loading="translatingItem" @click="translateItem">翻译事项</el-button>
         </div>
+
+        <!-- item 翻译结果 -->
+        <div v-if="activeItem.content_zh" class="translation-box">
+          <div class="translation-title">中文翻译</div>
+          <div>{{ activeItem.content_zh }}</div>
+          <details>
+            <summary class="original-hint">查看俄语原文</summary>
+            <div class="message-text">{{ activeItem.content }}</div>
+          </details>
+        </div>
+        <div v-else-if="activeItem.content" class="message-text" style="margin: 12px 0">{{ activeItem.content }}</div>
 
         <div class="handler-box">
           <span>最后处理人：{{ activeItem.last_handled_by || '-' }}</span>
@@ -203,8 +216,21 @@
             <div class="message-meta">
               <strong>{{ message.direction === 'seller' ? '客服' : '买家' }}</strong>
               <span>{{ message.created_at_external || message.created_at }}</span>
+              <el-button
+                v-if="message.direction !== 'seller'"
+                size="small"
+                text
+                type="primary"
+                :loading="translatingMessageId === message.id"
+                @click="translateMessage(message)"
+              >翻译</el-button>
             </div>
-            <div class="message-text">{{ message.message_text || '无文本内容' }}</div>
+            <div v-if="message.message_text_zh" class="message-translation">{{ message.message_text_zh }}</div>
+            <details v-if="message.message_text_zh" class="original-hint">
+              <summary>俄语原文</summary>
+              <div class="message-text">{{ message.message_text }}</div>
+            </details>
+            <div v-else class="message-text">{{ message.message_text || '无文本内容' }}</div>
             <div v-if="message.attachments?.length" class="attachments">
               <el-button
                 v-for="(attachment, index) in message.attachments"
@@ -323,6 +349,8 @@ const activeItem = ref(null)
 const stats = ref({})
 const replyText = ref('')
 const returnActions = ref([])
+const translatingItem = ref(false)
+const translatingMessageId = ref(null)
 
 const filters = reactive({
   search: '',
@@ -470,12 +498,44 @@ async function generateDraft() {
   try {
     const res = await axios.post(`/api/customer-service/items/${activeItem.value.id}/ai-draft`)
     const draft = res.data.draft || ''
-    // 先保存草稿，再刷新详情（selectItem 会清空 replyText）
     replyText.value = draft
     await selectItem(activeItem.value)
     replyText.value = draft
+  } catch (err) {
+    ElMessage.error(err?.response?.data?.detail || '生成草稿失败')
   } finally {
     drafting.value = false
+  }
+}
+
+async function translateItem() {
+  if (!activeItem.value) return
+  translatingItem.value = true
+  try {
+    const res = await axios.post(`/api/customer-service/items/${activeItem.value.id}/translate`)
+    if (res.data.success) {
+      ElMessage.success(res.data.cached ? '已有翻译' : '翻译完成')
+    } else {
+      ElMessage.error(res.data.error || '翻译失败')
+    }
+    await selectItem(activeItem.value)
+  } finally {
+    translatingItem.value = false
+  }
+}
+
+async function translateMessage(message) {
+  translatingMessageId.value = message.id
+  try {
+    const res = await axios.post(`/api/customer-service/messages/${message.id}/translate`)
+    if (res.data.success) {
+      ElMessage.success(res.data.cached ? '已有翻译' : '翻译完成')
+    } else {
+      ElMessage.error(res.data.error || '翻译失败')
+    }
+    await selectItem(activeItem.value)
+  } finally {
+    translatingMessageId.value = null
   }
 }
 
@@ -824,6 +884,35 @@ function formatHours(hours) {
   color: #f59e0b;
   font-size: 12px;
   letter-spacing: 1px;
+}
+
+.original-hint {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.translation-box {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
+.translation-title {
+  font-weight: 600;
+  color: #0369a1;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.message-translation {
+  margin-top: 8px;
+  color: #0369a1;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 

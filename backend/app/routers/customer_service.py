@@ -31,7 +31,10 @@ from app.models.models import (
     User,
 )
 from app.routers.auth import get_current_user
+from app.services.ai_client import AIClient, AIClientError
+from app.services.ai_prompt_service import get_active_template, render_template
 from app.services.customer_service_sync import CustomerServiceSyncService
+from app.services.customer_translation_service import CustomerTranslationService
 from app.services.wb_customer_client import WBCustomerAPIError, WBCustomerClient, WBCustomerRateLimit
 
 
@@ -341,18 +344,112 @@ def generate_ai_reply_draft(
     current_user: User = Depends(get_current_user),
 ):
     item = _get_visible_item(db, item_id, current_user)
-    draft = _make_russian_reply_draft(item)
+    try:
+        template = get_active_template(db, "customer_reply")
+        variables = {
+            "channel": item.channel,
+            "product_name": item.product_name or item.product_name_ru or item.sku or str(item.nm_id) or "",
+            "content": item.content or "",
+            "content_zh": item.content_zh or "",
+        }
+        messages = sorted(item.messages or [], key=lambda m: m.created_at_external or m.created_at)
+        variables["messages"] = "\n".join([
+            f"{'客服' if m.direction == 'seller' else '买家'}: {m.message_text}"
+            for m in messages[-10:]
+            if m.message_text
+        ])
+        system_prompt = template.system_prompt
+        user_prompt = render_template(template.user_prompt_template, variables)
+        output = AIClient(db).chat_json(
+            system_prompt,
+            user_prompt,
+            template.temperature,
+            template.max_tokens,
+        )
+        draft = (output.get("reply") or output.get("draft") or "").strip()
+        if not draft:
+            raise AIClientError("AI 未返回 reply")
+        if _contains_cjk(draft):
+            raise HTTPException(status_code=400, detail="AI 草稿含中文，已拦截，请调整 Prompt 后重试")
+    except AIClientError as exc:
+        _record_action(
+            db,
+            item,
+            current_user,
+            "ai_draft_generated",
+            request={"channel": item.channel, "template": "customer_reply"},
+            success=False,
+            error=str(exc),
+        )
+        db.commit()
+        raise HTTPException(status_code=400, detail=str(exc))
+
     _record_action(
         db,
         item,
         current_user,
         "ai_draft_generated",
-        request={"channel": item.channel, "content": item.content},
+        request={"channel": item.channel, "template": "customer_reply"},
         response={"draft": draft},
     )
     _touch_handled(item, current_user)
     db.commit()
     return {"success": True, "draft": draft}
+
+
+@router.post("/items/{item_id}/translate")
+def translate_customer_service_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """手动翻译客服事项（手动触发，不自动翻译）"""
+    item = _get_visible_item(db, item_id, current_user)
+    service = CustomerTranslationService(db)
+    result = service.translate_item(item)
+    _record_action(
+        db,
+        item,
+        current_user,
+        "translate",
+        request={"target": "item"},
+        response={k: v for k, v in result.items() if k not in ("content_zh",)},
+        success=result.get("success", False),
+        error=result.get("error", ""),
+    )
+    _touch_handled(item, current_user)
+    db.commit()
+    return result
+
+
+@router.post("/messages/{message_id}/translate")
+def translate_customer_service_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """手动翻译单条客服消息（手动触发，不自动翻译）"""
+    message = db.query(CustomerServiceMessage).filter(
+        CustomerServiceMessage.id == message_id
+    ).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    # 权限校验：通过 item 访问权限
+    _get_visible_item(db, message.item_id, current_user)
+    service = CustomerTranslationService(db)
+    result = service.translate_message(message)
+    _record_action(
+        db,
+        message.item,
+        current_user,
+        "translate_message",
+        request={"target": "message", "message_id": message_id},
+        response={k: v for k, v in result.items() if k not in ("message_text_zh",)},
+        success=result.get("success", False),
+        error=result.get("error", ""),
+    )
+    db.commit()
+    return result
 
 
 @router.post("/items/{item_id}/reply")
@@ -780,6 +877,11 @@ def _serialize_item(
         "customer_name": item.customer_name,
         "title": item.title,
         "content": item.content,
+        "content_zh": item.content_zh,
+        "title_zh": item.title_zh,
+        "translation_status": item.translation_status,
+        "translated_at": _fmt(item.translated_at),
+        "translation_error": item.translation_error,
         "rating": item.rating,
         "rating_display": _rating_stars(item.rating) if item.rating else None,
         "status": item.status,
@@ -803,8 +905,6 @@ def _serialize_item(
         "raw_json": _raw(item),
         "created_at": _fmt(item.created_at),
         "updated_at": _fmt(item.updated_at),
-        # buyer_key 已废弃，WB 无跨渠道买家ID
-        # "buyer_key": _buyer_key(item),
     }
     if include_messages:
         messages = sorted(item.messages or [], key=lambda m: m.created_at_external or m.created_at)
@@ -823,6 +923,10 @@ def _serialize_message(message: CustomerServiceMessage) -> Dict[str, Any]:
         "sender_type": message.sender_type,
         "sender_name": message.sender_name,
         "message_text": message.message_text,
+        "message_text_zh": message.message_text_zh,
+        "translation_status": message.translation_status,
+        "translated_at": _fmt(message.translated_at),
+        "translation_error": message.translation_error,
         "attachments": _json_loads(message.attachments_json, []),
         "created_at_external": _fmt(message.created_at_external),
         "created_at": _fmt(message.created_at),

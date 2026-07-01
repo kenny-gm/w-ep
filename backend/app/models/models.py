@@ -429,6 +429,15 @@ class CustomerServiceItem(Base):
     raw_json = Column(Text, default="{}")
     buyer_key = Column(String(200), nullable=True, index=True)  # deprecated: WB 无稳定跨渠道买家ID，不再用于聚合，保留字段仅避免破坏性DB迁移
     reply_sign = Column(String(200), nullable=True)  # 买家聊天回复凭证（WB API 发送用）
+
+    # 翻译字段（手动触发，不自动翻译）
+    content_zh = Column(Text, nullable=True)
+    title_zh = Column(Text, nullable=True)
+    translation_status = Column(String(30), default="pending")  # pending/translated/failed
+    translated_at = Column(DateTime, nullable=True)
+    translation_error = Column(Text, nullable=True)
+    translation_source_hash = Column(String(64), nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")))
     updated_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")), onupdate=lambda ctx: datetime.now(ZoneInfo("Asia/Shanghai")))
 
@@ -467,6 +476,13 @@ class CustomerServiceMessage(Base):
     created_at_external = Column(DateTime, nullable=True)
     raw_json = Column(Text, default="{}")
     created_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")))
+
+    # 翻译字段（手动触发，不自动翻译）
+    message_text_zh = Column(Text, nullable=True)
+    translation_status = Column(String(30), default="pending")  # pending/translated/failed
+    translated_at = Column(DateTime, nullable=True)
+    translation_error = Column(Text, nullable=True)
+    translation_source_hash = Column(String(64), nullable=True)
 
     item = relationship("CustomerServiceItem", back_populates="messages")
 
