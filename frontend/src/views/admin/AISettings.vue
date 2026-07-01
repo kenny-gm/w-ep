@@ -9,7 +9,7 @@
         <el-form :model="cfg" label-width="140px" class="settings-form" v-loading="loading">
 
           <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-            API Key 仅通过服务器 <code>.env</code> 文件配置，页面不显示也不保存 Key。
+            API Key 可在页面填写，由后台加密存储，不回显明文。
           </el-alert>
 
           <el-divider content-position="left">连接状态</el-divider>
@@ -22,8 +22,45 @@
             <el-tag :type="cfg.api_key_configured ? 'success' : 'danger'">
               {{ cfg.api_key_configured ? '✅ 已配置' : '❌ 未配置' }}
             </el-tag>
-            <span class="field-hint">在服务器 .env 中配置 AI_API_KEY（MiniMax / OpenAI 均可）</span>
           </el-form-item>
+
+          <el-form-item label="Key 来源">
+            <el-tag :type="sourceTagType">{{ sourceLabel }}</el-tag>
+          </el-form-item>
+
+          <el-divider content-position="left">API Key 配置</el-divider>
+
+          <el-form-item label="新 API Key">
+            <el-input
+              v-model="apiKeyInput"
+              type="password"
+              show-password
+              :disabled="saving"
+              style="width: 360px"
+              placeholder="留空则不修改当前 API Key"
+            />
+          </el-form-item>
+
+          <el-form-item>
+            <el-button type="primary" @click="saveSettings" :loading="saving">保存配置</el-button>
+            <el-button @click="testConnection" :loading="testing" style="margin-left: 8px">测试连接</el-button>
+            <el-button
+              v-if="cfg.api_key_configured && cfg.api_key_source === 'database'"
+              type="danger"
+              plain
+              @click="confirmClearKey"
+              style="margin-left: 8px"
+            >
+              清除后台 Key
+            </el-button>
+          </el-form-item>
+
+          <el-alert v-if="testResult" type="info" show-icon style="margin-top: 12px" :closable="true" @close="testResult = null">
+            <template #title>
+              <span v-if="testResult.success">✅ 连接成功，模型：{{ testResult.model }}</span>
+              <span v-else>❌ {{ testResult.error }}</span>
+            </template>
+          </el-alert>
 
           <el-divider content-position="left">模型配置</el-divider>
 
@@ -52,20 +89,6 @@
             <el-input-number v-model="cfg.max_tokens" :min="100" :max="8000" :disabled="saving" controls-position="right" />
           </el-form-item>
 
-          <el-divider />
-
-          <el-form-item>
-            <el-button type="primary" @click="saveSettings" :loading="saving">保存配置</el-button>
-            <el-button @click="testConnection" :loading="testing" style="margin-left: 8px">测试连接</el-button>
-          </el-form-item>
-
-          <el-alert v-if="testResult" type="info" show-icon style="margin-top: 12px" :closable="true" @close="testResult = null">
-            <template #title>
-              <span v-if="testResult.success">✅ 连接成功，模型：{{ testResult.model }}</span>
-              <span v-else>❌ {{ testResult.error }}</span>
-            </template>
-          </el-alert>
-
         </el-form>
       </div>
     </el-card>
@@ -73,23 +96,45 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { reactive, ref, computed, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 
 const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
 const testResult = ref(null)
+const apiKeyInput = ref('')
 
 const cfg = reactive({
   enabled: false,
   provider: 'openai',
   base_url: 'https://api.openai.com/v1',
-  model: 'gpt-4.1-mini',
+  model: 'gpt-4o-mini',
   api_key_configured: false,
+  api_key_source: 'none',
   timeout: 60,
   max_tokens: 1200,
+})
+
+const sourceLabel = computed(() => {
+  const map = {
+    database: '后台数据库',
+    env: '服务器环境变量',
+    decrypt_error: '解密失败',
+    none: '未配置',
+  }
+  return map[cfg.api_key_source] || '未配置'
+})
+
+const sourceTagType = computed(() => {
+  const map = {
+    database: 'success',
+    env: 'success',
+    decrypt_error: 'warning',
+    none: 'info',
+  }
+  return map[cfg.api_key_source] || 'info'
 })
 
 async function fetchSettings() {
@@ -101,6 +146,7 @@ async function fetchSettings() {
     cfg.base_url = res.data.base_url
     cfg.model = res.data.model
     cfg.api_key_configured = res.data.api_key_configured
+    cfg.api_key_source = res.data.api_key_source || 'none'
     cfg.timeout = res.data.timeout
     cfg.max_tokens = res.data.max_tokens
   } catch (e) {
@@ -113,20 +159,49 @@ async function fetchSettings() {
 async function saveSettings() {
   saving.value = true
   try {
-    await axios.patch('/api/ai-settings', {
+    const payload = {
       enabled: cfg.enabled,
       provider: cfg.provider,
       base_url: cfg.base_url,
       model: cfg.model,
       timeout: cfg.timeout,
       max_tokens: cfg.max_tokens,
-    })
+    }
+    if (apiKeyInput.value && apiKeyInput.value.trim() !== '') {
+      payload.api_key = apiKeyInput.value.trim()
+    }
+    await axios.patch('/api/ai-settings', payload)
     ElMessage.success('保存成功')
+    apiKeyInput.value = ''
     await fetchSettings()
   } catch (e) {
     ElMessage.error('保存失败：' + (e.response?.data?.detail || e.message))
   } finally {
     saving.value = false
+  }
+}
+
+async function confirmClearKey() {
+  try {
+    await ElMessageBox.confirm(
+      '确定要清除后台存储的 API Key 吗？清除后如果 .env 仍有配置，将回退到环境变量。',
+      '清除确认',
+      { confirmButtonText: '确定清除', cancelButtonText: '取消', type: 'warning' }
+    )
+    await clearApiKey()
+  } catch {
+    // 用户取消
+  }
+}
+
+async function clearApiKey() {
+  try {
+    const res = await axios.delete('/api/ai-settings/api-key')
+    cfg.api_key_configured = res.data.api_key_configured
+    cfg.api_key_source = res.data.api_key_source
+    ElMessage.success('已清除后台 API Key')
+  } catch (e) {
+    ElMessage.error('清除失败：' + (e.response?.data?.detail || e.message))
   }
 }
 
