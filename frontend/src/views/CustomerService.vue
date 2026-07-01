@@ -178,9 +178,11 @@
               <el-tag type="info" class="external-id-tag">WB #{{ activeItem.external_id?.slice(0, 8) || '-' }}</el-tag>
             </div>
             <div class="product-badges">
-              <el-tag type="info">nmId: {{ activeItem.nm_id || '-' }}</el-tag>
-              <el-tag type="warning">SKU: {{ activeItem.sku || '-' }}</el-tag>
-              <el-tag v-if="activeItem.product_name || activeItem.product_name_ru" type="success">{{ activeItem.product_name || activeItem.product_name_ru }}</el-tag>
+              <strong class="product-name-primary" v-if="activeItem.product_name || activeItem.product_name_ru">
+                {{ activeItem.product_name || activeItem.product_name_ru }}
+              </strong>
+              <el-tag type="info">nmId {{ activeItem.nm_id || '-' }}</el-tag>
+              <el-tag type="warning">SKU {{ activeItem.sku || '-' }}</el-tag>
             </div>
             <p>{{ activeItem.shop_name }} / {{ activeItem.owner || activeItem.assigned_owner || '未分配负责人' }}</p>
           </div>
@@ -997,6 +999,13 @@ function formatHours(hours) {
   gap: 6px;
   flex-wrap: wrap;
   margin-bottom: 6px;
+}
+
+.product-name-primary {
+  font-weight: 700;
+  font-size: 15px;
+  color: #166534;
+  margin-right: 4px;
 }
 
 .detail-head p {
