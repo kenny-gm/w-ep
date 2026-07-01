@@ -128,35 +128,37 @@
 
     <div class="workspace">
       <section class="queue" v-loading="loading" :class="{ 'hide-on-mobile': !!activeItem }">
-        <button
-          v-for="item in items"
-          :key="item.id"
-          :class="['queue-item', { active: activeItem?.id === item.id }]"
-          @click="selectItem(item)"
-        >
-          <div class="queue-head">
-            <el-tag size="small" :type="channelTag(item.channel)">{{ channelLabel(item.channel) }}</el-tag>
-            <el-tag v-if="item.risk_level === 'urgent'" size="small" type="danger">紧急</el-tag>
-            <el-tag v-else-if="item.risk_level === 'high'" size="small" type="warning">高风险</el-tag>
-            <span class="time">{{ item.external_created_at || '-' }}</span>
-          </div>
-          <div class="product-line">
-            <strong>{{ item.product_name || item.product_name_ru || item.sku || item.nm_id || '未匹配产品' }}</strong>
-            <span v-if="item.channel === 'feedback' && item.rating" class="rating-stars">{{ item.rating_display || '' }}</span>
-          </div>
-          <div class="content-line">{{ item.content_zh || item.content || '无文本内容' }}</div>
-          <div v-if="item.content_zh" class="original-hint">已翻译，详情可查看俄语原文</div>
-          <div class="meta-line">
-            <span>{{ item.shop_name }}</span>
-            <span>{{ item.owner || item.assigned_owner || '未分配' }}</span>
+        <div class="queue-items-wrapper">
+          <button
+            v-for="item in items"
+            :key="item.id"
+            :class="['queue-item', { active: activeItem?.id === item.id }]"
+            @click="selectItem(item)"
+          >
+            <div class="queue-head">
+              <el-tag size="small" :type="channelTag(item.channel)">{{ channelLabel(item.channel) }}</el-tag>
+              <el-tag v-if="item.risk_level === 'urgent'" size="small" type="danger">紧急</el-tag>
+              <el-tag v-else-if="item.risk_level === 'high'" size="small" type="warning">高风险</el-tag>
+              <span class="time">{{ item.external_created_at || '-' }}</span>
+            </div>
+            <div class="product-line">
+              <strong>{{ item.product_name || item.product_name_ru || item.sku || item.nm_id || '未匹配产品' }}</strong>
+              <span v-if="item.channel === 'feedback' && item.rating" class="rating-stars">{{ item.rating_display || '' }}</span>
+            </div>
+            <div class="content-line">{{ item.content_zh || item.content || '无文本内容' }}</div>
+            <div v-if="item.content_zh" class="original-hint">已翻译，详情可查看俄语原文</div>
+            <div class="meta-line">
+              <span>{{ item.shop_name }}</span>
+              <span>{{ item.owner || item.assigned_owner || '未分配' }}</span>
 
-          </div>
-          <div v-if="item.channel === 'return_claim'" class="countdown" :class="countdownClass(item)">
-            退货处理剩余 {{ formatHours(item.sla_hours_left) }}
-          </div>
-        </button>
+            </div>
+            <div v-if="item.channel === 'return_claim'" class="countdown" :class="countdownClass(item)">
+              退货处理剩余 {{ formatHours(item.sla_hours_left) }}
+            </div>
+          </button>
 
-        <el-empty v-if="!loading && !items.length" description="暂无客服事项" />
+          <el-empty v-if="!loading && !items.length" description="暂无客服事项" />
+        </div>
       </section>
 
       <section class="detail" v-if="activeItem" :class="{ 'hide-on-mobile': !activeItem }">
@@ -800,6 +802,8 @@ function formatHours(hours) {
 .workspace {
   display: grid;
   grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  align-items: stretch;
   gap: 14px;
   min-height: calc(100vh - 260px);
 }
@@ -809,11 +813,19 @@ function formatHours(hours) {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+  overflow: hidden;
 }
 
 .queue {
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
   padding: 8px;
+}
+
+.queue-items-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .queue-item {
@@ -829,6 +841,15 @@ function formatHours(hours) {
 
 .queue-item + .queue-item {
   margin-top: 8px;
+}
+
+.queue-items-wrapper::-webkit-scrollbar {
+  width: 4px;
+}
+
+.queue-items-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 .queue-item:hover,
