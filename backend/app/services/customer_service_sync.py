@@ -343,16 +343,14 @@ class CustomerServiceSyncService:
             if created_at and created_at > (existing.external_updated_at or existing.external_created_at or self._now()):
                 existing.external_updated_at = created_at
             # 聊天状态映射规则：
-            # - 买家新消息进来：open/unanswered（即使原状态是 closed/pending_internal，也重开）
+            # - 买家新消息进来：open/unanswered
             # - 客服消息进来：replied/answered
-            # - archived 状态不变，除非人工干预
-            if existing.status != "archived":
-                if direction == "buyer":
-                    existing.status = "open"
-                    existing.reply_status = "unanswered"
-                else:  # seller
-                    existing.status = "replied"
-                    existing.reply_status = "answered"
+            if direction == "buyer":
+                existing.status = "open"
+                existing.reply_status = "unanswered"
+            else:  # seller
+                existing.status = "replied"
+                existing.reply_status = "answered"
             existing.updated_at = self._now()
             return existing
         item = self._upsert_item(
@@ -505,7 +503,8 @@ class CustomerServiceSyncService:
             item.reply_status = "answered" if is_answered else "unanswered"
         if override_status is not None:
             item.status = override_status
-        elif item.status not in ("pending_internal", "closed", "archived"):
+        else:
+            # 始终更新状态，不受旧状态限制
             item.status = "replied" if is_answered else "open"
         item.issue_type = self._issue_type(channel, item.content, raw)
         item.risk_level = self._risk_level(channel, item.rating, item.sla_deadline_at)
