@@ -493,6 +493,10 @@ function setQuickKey(key) {
     clearQuickKey()
   } else {
     filters.quick_key = key
+    // 清除可能干扰的固定筛选，只保留 quick_key 精确过滤
+    filters.shop_id = null
+    filters.owner = ''
+    filters.search = ''
     const next = QUICK_FILTER_STATE[key]
     if (next) {
       filters.channel = next.channel
@@ -507,6 +511,9 @@ function clearQuickKey() {
   filters.quick_key = null
   filters.channel = 'all'
   filters.status = 'open'
+  filters.shop_id = null
+  filters.owner = ''
+  filters.search = ''
   activeItem.value = null
   reload()
 }
