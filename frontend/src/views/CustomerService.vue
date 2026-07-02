@@ -134,13 +134,13 @@
           <button
             v-for="item in items"
             :key="item.id"
-            :class="['queue-item', { active: activeItem?.id === item.id }]"
+            :class="['queue-item', `queue-item-${item.channel}`, { active: activeItem?.id === item.id }]"
             @click="selectItem(item)"
           >
             <!-- 第一行：渠道 + 业务状态 + 时间 -->
             <div class="queue-card-top">
               <div class="queue-card-state">
-                <span class="queue-card-channel">{{ channelLabel(item.channel) }}</span>
+                <span class="queue-card-channel" :class="`channel-${item.channel}`">{{ channelLabel(item.channel) }}</span>
                 <span
                   v-if="getDisplayStatus(item)"
                   class="queue-card-status"
@@ -1136,9 +1136,62 @@ function getReturnSlaClass(item) {
 
 .queue-item:hover,
 .queue-item.active {
-  background: #f8fbff;
   border-color: #93c5fd;
+  box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.35);
 }
+
+/* ── 渠道底色（左边框 + 渐变背景） ───────── */
+.queue-item-feedback {
+  border-left: 4px solid #22c55e;
+  background: linear-gradient(90deg, #f0fdf4 0, #ffffff 28%);
+}
+
+.queue-item-question {
+  border-left: 4px solid #8b5cf6;
+  background: linear-gradient(90deg, #f5f3ff 0, #ffffff 28%);
+}
+
+.queue-item-return_claim {
+  border-left: 4px solid #ef4444;
+  background: linear-gradient(90deg, #fef2f2 0, #ffffff 28%);
+}
+
+.queue-item-chat {
+  border-left: 4px solid #f97316;
+  background: linear-gradient(90deg, #fff7ed 0, #ffffff 28%);
+}
+
+/* ── 渠道标签颜色 ─────────────────────────── */
+.queue-card-channel {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.channel-feedback {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.channel-question {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.channel-return_claim {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.channel-chat {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
 
 /* ── 第一行：渠道 + 状态 + 时间 ───────────── */
 .queue-card-top {
