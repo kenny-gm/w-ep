@@ -15,7 +15,12 @@ def track_operation_effects():
         ).all()
         
         for log in logs:
-            tracking_end = (datetime.strptime(log.log_date, "%Y-%m-%d") + timedelta(days=log.effect_tracking_days)).strftime("%Y-%m-%d")
+            log_date = log.log_date
+            if isinstance(log_date, datetime):
+                log_date_str = log_date.strftime("%Y-%m-%d")
+            else:
+                log_date_str = log_date
+            tracking_end = (datetime.strptime(log_date_str, "%Y-%m-%d") + timedelta(days=log.effect_tracking_days)).strftime("%Y-%m-%d")
             
             metrics = db.query(MetricHistory).filter(
                 MetricHistory.product_id == log.product_id,
@@ -52,14 +57,14 @@ def track_operation_effects():
             if effect == "positive":
                 analysis.append("操作后指标有所改善")
                 if after["conversion_rate"] > before.get("conversion_rate", 0):
-                    analysis.append(f"转化率提升 {(after[conversion_rate] - before[conversion_rate]):.2f}%")
+                    analysis.append(f"转化率提升 {(after['conversion_rate'] - before['conversion_rate']):.2f}%")
                 if after["roas"] > before.get("roas", 0):
-                    analysis.append(f"ROAS提升 {(after[roas] - before[roas]):.2f}")
+                    analysis.append(f"ROAS提升 {(after['roas'] - before['roas']):.2f}")
             elif effect == "negative":
                 analysis.append("操作后指标下降")
                 if after["sales"] < before.get("sales", 0):
                     if before.get("sales", 0) > 0:
-                        analysis.append(f"销售额下降 {((before[sales] - after[sales]) / before[sales] * 100):.1f}%")
+                        analysis.append(f"销售额下降 {((before['sales'] - after['sales']) / before['sales'] * 100):.1f}%")
             else:
                 analysis.append("操作前后无明显变化")
             
