@@ -246,10 +246,15 @@
             <el-dropdown @command="handleStatusCommand" size="small">
               <el-button plain size="small">处理状态</el-button>
               <template #dropdown>
-                <el-dropdown-menu>
+                <el-dropdown-menu v-if="activeItem.channel === 'chat'">
+                  <el-dropdown-item command="chat_waiting_seller">待卖家回复</el-dropdown-item>
+                  <el-dropdown-item command="chat_waiting_buyer">待买家回复</el-dropdown-item>
+                  <el-dropdown-item command="chat_finished">已完结</el-dropdown-item>
+                  <el-dropdown-item command="pending_internal">内部处理中</el-dropdown-item>
+                </el-dropdown-menu>
+                <el-dropdown-menu v-else>
                   <el-dropdown-item command="pending_internal">转内部处理</el-dropdown-item>
-                  <el-dropdown-item v-if="activeItem.channel !== 'chat'" command="closed">关闭</el-dropdown-item>
-                  <el-dropdown-item v-if="activeItem.channel === 'chat'" command="closed">标记完结</el-dropdown-item>
+                  <el-dropdown-item command="closed">关闭</el-dropdown-item>
                   <el-dropdown-item command="open">重新打开</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -501,6 +506,9 @@ function getDisplayStatus(item) {
   if (item.channel === 'chat') {
     if (item.status === 'closed') {
       return { key: 'chat_finished', label: '已完结', type: 'info' }
+    }
+    if (item.status === 'pending_internal') {
+      return { key: 'pending_internal', label: '内部处理中', type: 'warning' }
     }
     if (item.reply_status === 'unanswered') {
       return { key: 'waiting_seller', label: '待卖家回复', type: 'danger' }
@@ -853,9 +861,28 @@ async function rejectQuestion() {
   }
 }
 
-async function handleStatusCommand(status) {
+function buildStatusPayload(command) {
+  if (activeItem.value?.channel === 'chat') {
+    if (command === 'chat_waiting_seller') {
+      return { status: 'open', reply_status: 'unanswered' }
+    }
+    if (command === 'chat_waiting_buyer') {
+      return { status: 'replied', reply_status: 'answered' }
+    }
+    if (command === 'chat_finished') {
+      return { status: 'closed', reply_status: 'answered' }
+    }
+    if (command === 'pending_internal') {
+      return { status: 'pending_internal' }
+    }
+  }
+  return { status: command }
+}
+
+async function handleStatusCommand(command) {
   if (!activeItem.value) return
-  await axios.patch(`/api/customer-service/items/${activeItem.value.id}/status`, { status })
+  const payload = buildStatusPayload(command)
+  await axios.patch(`/api/customer-service/items/${activeItem.value.id}/status`, payload)
   ElMessage.success('状态已更新')
   await Promise.all([selectItem(activeItem.value), reload()])
 }

@@ -54,6 +54,7 @@ class AssignOwnerRequest(BaseModel):
 
 class StatusUpdateRequest(BaseModel):
     status: str
+    reply_status: Optional[str] = None
 
 
 class InternalNoteUpdateRequest(BaseModel):
@@ -691,16 +692,26 @@ def update_customer_service_status(
     current_user: User = Depends(get_current_user),
 ):
     allowed = {"open", "pending_internal", "replied", "closed", "archived"}
+    allowed_reply_status = {"unanswered", "answered", "failed"}
     if data.status not in allowed:
         raise HTTPException(status_code=400, detail="无效状态")
+    if data.reply_status is not None and data.reply_status not in allowed_reply_status:
+        raise HTTPException(status_code=400, detail="无效回复状态")
     item = _get_visible_item(db, item_id, current_user)
     item.status = data.status
+    if data.reply_status is not None:
+        item.reply_status = data.reply_status
     if data.status == "archived":
         item.is_archived = True
     if data.status in ("closed", "archived"):
         item.closed_by = current_user.username
         item.closed_at = _now()
         item.assignment_status = "closed"
+    else:
+        item.closed_by = None
+        item.closed_at = None
+        if item.assignment_status == "closed":
+            item.assignment_status = "assigned" if item.assigned_owner else "unassigned"
     _touch_handled(item, current_user)
     _record_action(db, item, current_user, f"status_{data.status}", request=data.dict())
     db.commit()
@@ -1039,6 +1050,8 @@ def _service_display_status(item: CustomerServiceItem) -> Dict[str, str]:
         return {"key": "pending_internal", "label": "内部处理中", "type": "warning"}
 
     if item.channel == "chat":
+        if item.status == "pending_internal":
+            return {"key": "pending_internal", "label": "内部处理中", "type": "warning"}
         if item.reply_status == "unanswered":
             return {"key": "waiting_seller", "label": "待卖家回复", "type": "danger"}
         if item.status == "replied" or item.reply_status == "answered":
