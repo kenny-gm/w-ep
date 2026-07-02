@@ -5,6 +5,18 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.database import get_db
 from app.models.models import OperationLog, User, Product, Shop
+
+
+def _can_access_product(db, current_user, product_id):
+    if product_id is None:
+        return None
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="产品不存在")
+    owners = getattr(current_user, "allowed_owners", None)
+    if isinstance(owners, (list, tuple, set)) and owners and product.owner not in owners:
+        raise HTTPException(status_code=403, detail="无权操作该产品日志")
+    return product
 from app.routers.auth import get_current_user
 from pydantic import BaseModel
 from typing import Optional
@@ -137,6 +149,9 @@ def create_operation_log(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    # 权限校验
+    _can_access_product(db, current_user, data.product_id)
+
     log = OperationLog(
         user_id=current_user.id,
         product_id=data.product_id,
@@ -163,7 +178,10 @@ def update_operation_log(
     log = db.query(OperationLog).filter(OperationLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="日志不存在")
-    
+
+    # 权限校验
+    _can_access_product(db, current_user, log.product_id)
+
     if data.title is not None:
         log.title = data.title
     if data.content is not None:

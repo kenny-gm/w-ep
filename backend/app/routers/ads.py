@@ -40,19 +40,22 @@ def list_ads(
             return {"total": 0, "items": []}
     
     query = db.query(AdRecord)
-    
+
+    if allowed_product_ids is not None:
+        query = query.filter(AdRecord.product_id.in_(allowed_product_ids))
+
     if shop_id:
         query = query.filter(AdRecord.shop_id == shop_id)
-    
+
     if ad_type:
         query = query.filter(AdRecord.ad_type == ad_type)
-    
+
     if start_date:
         query = query.filter(AdRecord.record_date >= datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y-%m-%d"))
-    
+
     if end_date:
         query = query.filter(AdRecord.record_date < end_date)
-    
+
     total = query.count()
     records = query.order_by(AdRecord.record_date.desc()).offset(skip).limit(limit).all()
     
@@ -105,31 +108,30 @@ def ad_summary(
             return {"total_impressions": 0, "total_clicks": 0, "total_cost": 0, "total_sales": 0, "total_orders": 0, "avg_ctr": 0, "avg_cpc": 0, "avg_cpm": 0, "avg_acos": 0}
     
     query = db.query(AdRecord)
-    
+
+    if allowed_product_ids is not None:
+        query = query.filter(AdRecord.product_id.in_(allowed_product_ids))
+
     if shop_id:
         query = query.filter(AdRecord.shop_id == shop_id)
-    
+
     if start_date:
         query = query.filter(AdRecord.record_date >= datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y-%m-%d"))
-    
+
     if end_date:
         query = query.filter(AdRecord.record_date < end_date)
-    
+
     # 广告指标使用 advertising 类型
     ad_query = query.filter(AdRecord.ad_type == "advertising")
     ad_records = ad_query.all()
-    if allowed_product_ids is not None:
-        ad_records = [r for r in ad_records if r.product_id in allowed_product_ids]
-    
+
     total_impressions = sum(r.impressions or 0 for r in ad_records)
     total_clicks = sum(r.visitors or 0 for r in ad_records)
     total_cost = sum(r.cost or 0 for r in ad_records)
-    
+
     # 销售指标使用 product_analytics 类型（与销售看板一致）
     sales_query = query.filter(AdRecord.ad_type == "product_analytics")
     sales_records = sales_query.all()
-    if allowed_product_ids is not None:
-        sales_records = [r for r in sales_records if r.product_id in allowed_product_ids]
     
     total_sales = sum(r.sales or 0 for r in sales_records)
     total_orders = sum(r.order_count or 0 for r in sales_records)
@@ -188,20 +190,20 @@ def ads_by_product(
         func.avg(AdRecord.acos).label("avg_acos"),
         func.avg(AdRecord.roas).label("avg_roas")
     )
-    
+
+    if allowed_product_ids is not None:
+        query = query.filter(AdRecord.product_id.in_(allowed_product_ids))
+
     if shop_id:
         query = query.filter(AdRecord.shop_id == shop_id)
-    
+
     if start_date:
         query = query.filter(AdRecord.record_date >= datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y-%m-%d"))
-    
+
     if end_date:
         query = query.filter(AdRecord.record_date < end_date)
-    
+
     results = query.group_by(AdRecord.product_id).all()
-    
-    if allowed_product_ids is not None:
-        results = [r for r in results if r.product_id in allowed_product_ids]
     
     data = []
     for r in results:

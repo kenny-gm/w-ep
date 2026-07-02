@@ -864,7 +864,7 @@ class ComparisonData(BaseModel):
     ad_ratio: Optional[float] = None
 
 
-def get_stats_for_period(db: Session, start_date: datetime, end_date: datetime, shop_ids: List[int] = None) -> dict:
+def get_stats_for_period(db: Session, start_date: datetime, end_date: datetime, shop_ids: List[int] = None, current_user=None) -> dict:
     """获取指定时间段的统计数据"""
     shop_rates = get_shop_exchange_rates(db)
 
@@ -891,6 +891,7 @@ def get_stats_for_period(db: Session, start_date: datetime, end_date: datetime, 
         stats["order_count"] += 1
 
     # 广告数据 - 访客和加购(从analytics表)
+    user_allowed_owners = getattr(current_user, 'allowed_owners', None) if current_user else None
     ads_query = db.query(AdRecord).filter(
         AdRecord.record_date >= start_date,
         AdRecord.record_date < end_date,
@@ -898,6 +899,8 @@ def get_stats_for_period(db: Session, start_date: datetime, end_date: datetime, 
     )
     if shop_ids:
         ads_query = ads_query.filter(AdRecord.shop_id.in_(shop_ids))
+    if isinstance(user_allowed_owners, (list, tuple, set)) and user_allowed_owners:
+        ads_query = ads_query.join(Product, AdRecord.product_id == Product.id).filter(Product.owner.in_(user_allowed_owners))
 
     ads = ads_query.all()
     stats["visitors"] = sum(ad.visitors or 0 for ad in ads)
@@ -911,6 +914,8 @@ def get_stats_for_period(db: Session, start_date: datetime, end_date: datetime, 
     )
     if shop_ids:
         ads_cost_query = ads_cost_query.filter(AdRecord.shop_id.in_(shop_ids))
+    if isinstance(user_allowed_owners, (list, tuple, set)) and user_allowed_owners:
+        ads_cost_query = ads_cost_query.join(Product, AdRecord.product_id == Product.id).filter(Product.owner.in_(user_allowed_owners))
     ads_cost_records = ads_cost_query.all()
     shop_rates_local = get_shop_exchange_rates(db)
     stats["ad_cost"] = sum(convert_ad_cost(ad, shop_rates_local) for ad in ads_cost_records)
@@ -951,8 +956,12 @@ def get_comparison(
     prev_start = start_date - timedelta(days=period_days)
     prev_end = start_date - timedelta(days=1)
 
-    current_stats = get_stats_for_period(db, start_date, end_date + timedelta(days=1), filter_data.shop_ids)
-    prev_stats = get_stats_for_period(db, prev_start, prev_end + timedelta(days=1), filter_data.shop_ids)
+    # 根据当前用户的 allowed_owners 进行过滤
+    _raw_owners = getattr(current_user, 'allowed_owners', None)
+    user_allowed_owners = _raw_owners if isinstance(_raw_owners, (list, tuple, set)) else []
+
+    current_stats = get_stats_for_period(db, start_date, end_date + timedelta(days=1), filter_data.shop_ids, current_user)
+    prev_stats = get_stats_for_period(db, prev_start, prev_end + timedelta(days=1), filter_data.shop_ids, current_user)
 
     return ComparisonData(
         sales_amount=calculate_change(current_stats.get("sales_amount", 0), prev_stats.get("sales_amount", 0)),
@@ -985,12 +994,21 @@ def get_stats_by_owner(
 
     shop_rates = get_shop_exchange_rates(db)
 
-    # 获取产品-负责人映射
-    products = db.query(Product).filter(Product.owner != None, Product.owner != "")
+    # 根据当前用户的 allowed_owners 进行过滤
+    _raw_owners = getattr(current_user, 'allowed_owners', None)
+    user_allowed_owners = _raw_owners if isinstance(_raw_owners, (list, tuple, set)) else []
+    if user_allowed_owners:
+        if filter_data.owners:
+            filter_data.owners = list(set(filter_data.owners) & set(user_allowed_owners))
+        else:
+            filter_data.owners = user_allowed_owners
+
+    if filter_data.owners:
+        products = db.query(Product).filter(Product.owner != None, Product.owner != "", Product.owner.in_(filter_data.owners))
+    else:
+        products = db.query(Product).filter(Product.owner != None, Product.owner != "")
     if filter_data.shop_ids:
         products = products.filter(Product.shop_id.in_(filter_data.shop_ids))
-    if filter_data.owners:
-        products = products.filter(Product.owner.in_(filter_data.owners))
 
     products = products.all()
 
