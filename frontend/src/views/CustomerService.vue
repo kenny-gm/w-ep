@@ -160,10 +160,6 @@
             <div class="meta-line">
               <span>{{ item.shop_name }}</span>
               <span>{{ item.owner || item.assigned_owner || '未分配' }}</span>
-
-            </div>
-            <div v-if="item.channel === 'return_claim'" class="countdown" :class="getReturnSlaClass(item)">
-              {{ getReturnSlaText(item) }}
             </div>
           </button>
 
