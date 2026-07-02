@@ -349,18 +349,22 @@ class CustomerServiceSyncService:
             # 刷新外部更新时间
             if created_at and created_at > (existing.external_updated_at or existing.external_created_at or self._now()):
                 existing.external_updated_at = created_at
-            # 聊天状态映射规则：
-            # - 买家新消息进来：open/unanswered，重开会话
-            # - 客服消息进来：replied/answered
+            # 聊天状态映射规则（不覆盖已完结状态）：
+            # - 买家消息：只有在 closed_at 之后的新消息才重开
+            # - 卖家消息：不会把已完结聊天改回 replied
+            is_after_closed = not existing.closed_at or (created_at and created_at > existing.closed_at)
+            is_newer_event = not existing.external_updated_at or (created_at and created_at > existing.external_updated_at)
             if direction == "buyer":
-                existing.status = "open"
-                existing.reply_status = "unanswered"
-                existing.is_archived = False
-                existing.closed_by = None
-                existing.closed_at = None
-            else:  # seller
-                existing.status = "replied"
-                existing.reply_status = "answered"
+                if existing.status != "closed" or is_after_closed:
+                    existing.status = "open"
+                    existing.reply_status = "unanswered"
+                    existing.is_archived = False
+                    existing.closed_by = None
+                    existing.closed_at = None
+            elif direction in ("seller", "operator"):
+                if existing.status != "closed" and is_newer_event:
+                    existing.status = "replied"
+                    existing.reply_status = "answered"
             existing.updated_at = self._now()
             return existing
         item = self._upsert_item(

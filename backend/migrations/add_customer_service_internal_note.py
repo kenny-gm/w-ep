@@ -22,7 +22,6 @@ def migrate_add_customer_service_internal_note():
         _add_column(conn, "customer_service_items", "internal_note", "TEXT DEFAULT ''")
         _add_column(conn, "customer_service_items", "internal_note_updated_by", "VARCHAR(100)")
         _add_column(conn, "customer_service_items", "internal_note_updated_at", "DATETIME")
-        print("[migration] add_customer_service_internal_note 完成")
         return True
 
 

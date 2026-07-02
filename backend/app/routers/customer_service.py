@@ -144,7 +144,12 @@ def get_customer_service_stats(
         CustomerServiceItem.status.notin_(["closed", "archived"]),
     )
     chat_waiting_seller = chat_open_query.filter(
-        CustomerServiceItem.reply_status == "unanswered"
+        CustomerServiceItem.reply_status == "unanswered",
+        CustomerServiceItem.status.notin_(["pending_internal"]),
+    ).count()
+    chat_pending_internal = open_query.filter(
+        CustomerServiceItem.channel == "chat",
+        CustomerServiceItem.status == "pending_internal",
     ).count()
     chat_waiting_buyer = chat_open_query.filter(
         CustomerServiceItem.status == "replied"
@@ -174,6 +179,7 @@ def get_customer_service_stats(
         "chat_answered": chat_waiting_buyer,
         "chat_waiting_seller": chat_waiting_seller,
         "chat_waiting_buyer": chat_waiting_buyer,
+        "chat_pending_internal": chat_pending_internal,
         "chat_finished": chat_finished,
         # 全局
         "overdue": overdue,
@@ -205,9 +211,6 @@ def list_customer_service_items(
         ))
 
     # ── quick_key 精确过滤 ──────────────────────────────────
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.warning(f"[QUICK_KEY DEBUG] quick_key={quick_key!r}, channel={channel!r}, status={status!r}")
 
     if quick_key:
         if quick_key == "feedback_low_bad_unanswered":
@@ -285,6 +288,11 @@ def list_customer_service_items(
                 CustomerServiceItem.channel == "chat",
                 CustomerServiceItem.status == "closed",
             )
+        elif quick_key == "chat_pending_internal":
+            query = query.filter(
+                CustomerServiceItem.channel == "chat",
+                CustomerServiceItem.status == "pending_internal",
+            )
     else:
         # ── 普通 channel / status 过滤 ───────────────────
         if channel != "all":
@@ -316,8 +324,7 @@ def list_customer_service_items(
             CustomerServiceItem.external_id.like(like),
         ))
 
-    total_before_rating = total = query.count()
-    logger.warning(f"[QUICK_KEY DEBUG] total_after_filters={total}")
+    total = query.count()
     risk_order = case(
         (CustomerServiceItem.risk_level == "urgent", 0),
         (CustomerServiceItem.risk_level == "high", 1),
@@ -473,7 +480,7 @@ def generate_ai_reply_draft(
             "messages": messages_text,
             "return_context": "",
             "existing_answer": "",
-            "internal_note": item.internal_note or "",
+            "internal_note": getattr(item, "internal_note", "") or "",
         }
         system_prompt = template.system_prompt
         user_prompt = render_template(template.user_prompt_template, variables)
@@ -736,7 +743,11 @@ def update_customer_service_internal_note(
     item.internal_note_updated_by = current_user.username
     item.internal_note_updated_at = _now()
     _touch_handled(item, current_user)
-    _record_action(db, item, current_user, "update_internal_note", request={"old_note": old_note, "new_note": note})
+    _record_action(db, item, current_user, "update_internal_note", request={
+        "old_note_length": len(old_note),
+        "new_note_length": len(note),
+        "new_note_preview": note[:80] if note else "",
+    })
     db.commit()
     db.refresh(item)
     return {"success": True, "item": _serialize_item(item, include_messages=True, include_actions=True)}
@@ -1017,12 +1028,7 @@ def _service_display_status(item: CustomerServiceItem) -> Dict[str, str]:
         return {"key": "archived", "label": "已归档", "type": "info"}
     if item.status == "closed":
         if item.channel == "return_claim":
-            raw = item.raw_json
-            if isinstance(raw, str):
-                import json
-                raw = json.loads(raw) if raw else {}
-            elif not isinstance(raw, dict):
-                raw = {}
+            raw = _raw(item)
             wb_status = raw.get("status")
             wb_status_ex = raw.get("status_ex")
             # WB status: 0=新申请, 1=拒绝, 2=批准
@@ -1095,7 +1101,7 @@ def _serialize_item(
         "assigned_user_id": item.assigned_user_id,
         "assignment_status": item.assignment_status,
         "handover_note": item.handover_note,
-        "internal_note": item.internal_note or "",
+        "internal_note": getattr(item, "internal_note", "") or "",
         "internal_note_updated_by": item.internal_note_updated_by,
         "internal_note_updated_at": _fmt(item.internal_note_updated_at),
         "customer_name": item.customer_name,

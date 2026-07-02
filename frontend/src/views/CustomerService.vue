@@ -91,6 +91,10 @@
             <span class="channel-item-label">已完结</span>
             <span class="channel-item-num">{{ stats.chat_finished || 0 }}</span>
           </div>
+          <div class="channel-item clickable" :class="{ active: filters.quick_key === 'chat_pending_internal' }" @click="setQuickKey('chat_pending_internal')">
+            <span class="channel-item-label">内部处理中</span>
+            <span class="channel-item-num">{{ stats.chat_pending_internal || 0 }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -469,6 +473,7 @@ const QUICK_KEY_MAP = {
   chat_waiting_seller: '聊天待卖家回复',
   chat_waiting_buyer: '聊天待买家回复',
   chat_finished: '聊天已完结',
+  chat_pending_internal: '聊天内部处理中',
 }
 
 const QUICK_FILTER_STATE = {
@@ -485,6 +490,7 @@ const QUICK_FILTER_STATE = {
   chat_waiting_seller: { channel: 'chat', status: 'unanswered' },
   chat_waiting_buyer: { channel: 'chat', status: 'replied' },
   chat_finished: { channel: 'chat', status: 'closed' },
+  chat_pending_internal: { channel: 'chat', status: 'pending_internal' },
 }
 
 const quickKeyLabel = computed(() => QUICK_KEY_MAP[filters.quick_key] || null)
@@ -926,11 +932,13 @@ async function saveInternalNote() {
     const res = await axios.patch(`/api/customer-service/items/${activeItem.value.id}/note`, {
       internal_note: noteText.value || ''
     })
+    // 更新详情项（完整替换，保持所有字段同步）
     activeItem.value = res.data.item
     noteText.value = activeItem.value.internal_note || ''
+    // 更新列表中对应卡片（完整替换，保持所有元信息同步）
     const idx = items.value.findIndex(item => item.id === activeItem.value.id)
     if (idx >= 0) {
-      items.value[idx] = { ...items.value[idx], internal_note: activeItem.value.internal_note }
+      items.value[idx] = { ...items.value[idx], ...res.data.item }
     }
     ElMessage.success('备注已保存')
   } catch (err) {
