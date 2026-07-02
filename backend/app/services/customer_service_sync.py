@@ -230,6 +230,7 @@ class CustomerServiceSyncService:
         else:
             override_status = "open"
             override_reply_status = "unanswered"
+        external_updated = self._parse_dt(rec.get("updatedDate"))
         item = self._upsert_item(
             channel="question",
             external_id=str(rec.get("id") or rec.get("questionId")),
@@ -240,10 +241,11 @@ class CustomerServiceSyncService:
             external_status=question_status,
             is_answered=is_answered,
             external_created_at=self._parse_dt(rec.get("createdDate") or rec.get("date")),
-            external_updated_at=self._parse_dt(rec.get("updatedDate")),
+            external_updated_at=external_updated,
             raw=rec,
             override_status=override_status,
             override_reply_status=override_reply_status,
+            override_closed_at=external_updated if override_status == "closed" else None,
         )
         self._add_message(
             item=item,
@@ -391,6 +393,7 @@ class CustomerServiceSyncService:
         sla_deadline = created_at + timedelta(hours=120) if created_at else None
         content = rec.get("user_comment") or rec.get("comment") or rec.get("text") or ""
         actions = rec.get("actions") or rec.get("availableActions") or []
+        external_updated = self._parse_dt(rec.get("dt_update") or rec.get("updated_at") or rec.get("updatedAt"))
 
         # 查旧状态，用于判断 open→closed 过渡
         existing = self.db.query(CustomerServiceItem).filter(
@@ -425,12 +428,14 @@ class CustomerServiceSyncService:
             external_status=rec.get("status") or rec.get("status_ex") or "",
             is_answered=(reply_status == "answered"),
             external_created_at=created_at,
-            external_updated_at=self._parse_dt(rec.get("dt_update") or rec.get("updated_at") or rec.get("updatedAt")),
+            external_updated_at=external_updated,
             sla_deadline_at=sla_deadline,
             raw=rec,
             # 覆盖默认状态映射
             override_status=status,
             override_reply_status=reply_status,
+            # 归档退货：WB dt_update 才是真正的卖家处理时间
+            override_closed_at=external_updated if status == "closed" else None,
         )
         # 保存 actions 数组到 raw_json（已在 raw 中）
         self._add_message(
@@ -461,6 +466,7 @@ class CustomerServiceSyncService:
         sla_deadline_at: Optional[datetime] = None,
         override_status: Optional[str] = None,
         override_reply_status: Optional[str] = None,
+        override_closed_at: Optional[datetime] = None,
     ) -> CustomerServiceItem:
         if not external_id or external_id == "None":
             external_id = f"{channel}:{nm_id}:{external_created_at or self._now()}:{hash(content)}"
@@ -511,8 +517,8 @@ class CustomerServiceSyncService:
             item.reply_status = "answered" if is_answered else "unanswered"
         if override_status is not None:
             item.status = override_status
-            if override_status == "closed" and item.closed_at is None:
-                item.closed_at = self._now()
+            if override_status == "closed":
+                item.closed_at = override_closed_at or item.closed_at or self._now()
         else:
             # 始终更新状态，不受旧状态限制
             item.status = "replied" if is_answered else "open"
