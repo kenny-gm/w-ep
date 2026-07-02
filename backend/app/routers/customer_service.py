@@ -190,37 +190,31 @@ def list_customer_service_items(
         ))
 
     # ── quick_key 精确过滤 ──────────────────────────────────
-    rating_range = case(
-        (CustomerServiceItem.rating.in_([1, 2, 3]), "low"),
-        (CustomerServiceItem.rating.in_([4, 5]), "high"),
-        else_="other",
-    )
-
     if quick_key:
         if quick_key == "feedback_low_bad_unanswered":
             query = query.filter(
                 CustomerServiceItem.channel == "feedback",
-                rating_range == "low",
+                CustomerServiceItem.rating.in_([1, 2, 3]),
                 CustomerServiceItem.reply_status == "unanswered",
                 CustomerServiceItem.status.notin_(["closed", "archived"]),
             )
         elif quick_key == "feedback_low_bad_replied":
             query = query.filter(
                 CustomerServiceItem.channel == "feedback",
-                rating_range == "low",
+                CustomerServiceItem.rating.in_([1, 2, 3]),
                 CustomerServiceItem.reply_status == "answered",
             )
         elif quick_key == "feedback_high_bad_unanswered":
             query = query.filter(
                 CustomerServiceItem.channel == "feedback",
-                rating_range == "high",
+                CustomerServiceItem.rating.in_([4, 5]),
                 CustomerServiceItem.reply_status == "unanswered",
                 CustomerServiceItem.status.notin_(["closed", "archived"]),
             )
         elif quick_key == "feedback_high_bad_replied":
             query = query.filter(
                 CustomerServiceItem.channel == "feedback",
-                rating_range == "high",
+                CustomerServiceItem.rating.in_([4, 5]),
                 CustomerServiceItem.reply_status == "answered",
             )
         elif quick_key == "question_unanswered":
