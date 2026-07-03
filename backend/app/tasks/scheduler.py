@@ -73,13 +73,21 @@ def sync_due_shops_task():
     import logging
     from datetime import datetime, timedelta, timezone
     from app.database import SessionLocal
-    from app.models.models import Shop
+    from app.models.models import Shop, SyncJob
     import httpx
 
     logger = logging.getLogger("sync")
+
+    # 全局同步开关检查
+    from app.config import settings
+    if not getattr(settings, 'SYNC_ENABLED', True):
+        logger.info("[店铺定时同步] SYNC_ENABLED=false，已跳过")
+        return
+
     db = SessionLocal()
     try:
-        shops = db.query(Shop).filter(Shop.is_active == 1).all()
+        # 只查询 sync_enabled=True 的店铺
+        shops = db.query(Shop).filter(Shop.is_active == 1, Shop.sync_enabled == True).all()
         now_cst = datetime.now(timezone(timedelta(hours=8)))  # 北京时间 aware
 
         due_shops = []
@@ -99,11 +107,19 @@ def sync_due_shops_task():
             return
 
         logger.info(f"[店铺定时同步] 开始同步 {len(due_shops)} 个到期店铺: {[s.name for s in due_shops]}")
-        from app.config import settings
         api_key = settings.INTERNAL_API_KEY
         base_url = "http://localhost:8000"
 
         for shop in due_shops:
+            # 检查是否有 pending/running 的 all 或 customer_service 同步任务
+            existing_job = db.query(SyncJob).filter(
+                SyncJob.shop_id == shop.id,
+                SyncJob.sync_type.in_(["all", "customer_service"]),
+                SyncJob.status.in_(["pending", "running"])
+            ).first()
+            if existing_job:
+                logger.info(f"[店铺定时同步] {shop.name} 已有 pending/running 同步任务，跳过")
+                continue
             try:
                 resp = httpx.post(
                     f"{base_url}/api/shops/internal-sync/{shop.id}/?sync_type=all",

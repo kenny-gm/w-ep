@@ -79,6 +79,8 @@ class CustomerServiceSyncService:
                     )
                 ):
                     ext_id = str(rec.get("id") or rec.get("questionId"))
+                    if ext_id in seen_ids:
+                        continue
                     seen_ids.add(ext_id)
                     self._upsert_question(rec)
                     total += 1
@@ -98,6 +100,7 @@ class CustomerServiceSyncService:
         sync_log = self._create_sync_log("customer_service_feedbacks")
         try:
             since = int((self._now() - timedelta(days=days)).timestamp())
+            seen_ids: set = set()
             count = 0
             for answered in (False, True):
                 for rec in self._paged_feedbacks_api(
@@ -105,6 +108,10 @@ class CustomerServiceSyncService:
                         is_answered=answered, take=take, skip=skip, date_from=since
                     )
                 ):
+                    ext_id = str(rec.get("id") or rec.get("feedbackId"))
+                    if ext_id in seen_ids:
+                        continue
+                    seen_ids.add(ext_id)
                     self._upsert_feedback(rec)
                     count += 1
             self.db.commit()
@@ -129,6 +136,8 @@ class CustomerServiceSyncService:
             seen_ids: set = set()
             page_count = 0
             next_cursor = cursor
+            last_valid_cursor: Optional[str] = None  # 只在有 events 时才更新
+            empty_pages = 0
             self._chat_items.clear()  # 清空上批次缓存，防止残留
 
             while True:
@@ -137,11 +146,11 @@ class CustomerServiceSyncService:
 
                 result_block = raw.get("result") if isinstance(raw, dict) else {}
                 events = result_block.get("events", []) if isinstance(result_block, dict) else []
-                next_cursor = result_block.get("next") if isinstance(result_block, dict) else None
+                page_next_cursor = result_block.get("next") if isinstance(result_block, dict) else None
 
                 logger.info(
                     f"[WB Chat Sync][shop {self.shop.id}] 第 {page_count} 页: "
-                    f"events数量={len(events)}, next={next_cursor}"
+                    f"events数量={len(events)}, next={page_next_cursor}"
                 )
 
                 for rec in events:
@@ -152,20 +161,40 @@ class CustomerServiceSyncService:
                     self._upsert_chat_event(rec)
                     total_count += 1
 
-                # 没有事件时停止（不管 next_cursor 是否还有值，空结果=结束）
+                # 有事件时，记录 last_valid_cursor（用 page_next_cursor，不是 next_cursor）
+                if events and page_next_cursor:
+                    last_valid_cursor = page_next_cursor
+                    empty_pages = 0
+                elif events and not page_next_cursor:
+                    # 有事件但 WB 说没有下一页，记录当前页最后事件的 cursor（用 next_cursor 传入值）
+                    last_valid_cursor = next_cursor
+
+                # 没有事件时的处理
                 if not events:
-                    break
-                if not next_cursor:
+                    empty_pages += 1
+                    if empty_pages >= 2 or not page_next_cursor:
+                        # 连续两页空 or WB 说没有下一页，停止
+                        break
+                    # 第一页空：保存游标并退出（下次从此处继续）
+                    if page_next_cursor:
+                        self._set_setting(cursor_key, str(page_next_cursor), "WB 买家聊天同步游标")
+                    self.db.commit()
+                    self._finish_sync_log(sync_log, True, total_count, f"WB 买家聊天同步完成（空页中断）：{len(seen_ids)} 会话 {total_count} 事件，共 {page_count} 页")
+                    return {"success": True, "count": total_count, "sessions": len(seen_ids), "pages": page_count, "next_cursor": page_next_cursor}
+
+                if not page_next_cursor:
                     break
 
+                next_cursor = page_next_cursor
                 # 限流保护：页间暂停
                 time.sleep(1.1)
 
-            if next_cursor:
-                self._set_setting(cursor_key, str(next_cursor), "WB 买家聊天同步游标")
+            # 保存 last_valid_cursor（只有真正有下一页才保存，否则用已有游标继续）
+            if last_valid_cursor:
+                self._set_setting(cursor_key, str(last_valid_cursor), "WB 买家聊天同步游标")
             self.db.commit()
             self._finish_sync_log(sync_log, True, total_count, f"WB 买家聊天同步完成：{len(seen_ids)} 会话 {total_count} 事件，共 {page_count} 页")
-            return {"success": True, "count": total_count, "sessions": len(seen_ids), "pages": page_count, "next_cursor": next_cursor}
+            return {"success": True, "count": total_count, "sessions": len(seen_ids), "pages": page_count, "next_cursor": last_valid_cursor or next_cursor}
         except WBCustomerRateLimit as exc:
             self.db.rollback()
             self._finish_sync_log(sync_log, False, 0, f"WB 聊天限流: {exc}")
@@ -332,6 +361,9 @@ class CustomerServiceSyncService:
             ).first()
         if existing:
             self._chat_items[external_id_str] = existing  # 缓存更新
+            # 先保存旧值，用于判断状态
+            old_external_updated_at = existing.external_updated_at
+            old_closed_at = existing.closed_at
             # 已有记录，追加消息
             self._add_message(
                 item=existing,
@@ -351,9 +383,9 @@ class CustomerServiceSyncService:
                 existing.external_updated_at = created_at
             # 聊天状态映射规则（不覆盖已完结状态）：
             # - 买家消息：只有在 closed_at 之后的新消息才重开
-            # - 卖家消息：不会把已完结聊天改回 replied
-            is_after_closed = not existing.closed_at or (created_at and created_at > existing.closed_at)
-            is_newer_event = not existing.external_updated_at or (created_at and created_at > existing.external_updated_at)
+            # - 卖家消息：用 old_external_updated_at 判断，不把已完结聊天改回 replied
+            is_after_closed = not old_closed_at or (created_at and created_at > old_closed_at)
+            is_newer_event = not old_external_updated_at or (created_at and created_at > old_external_updated_at)
             if direction == "buyer":
                 if existing.status != "closed" or is_after_closed:
                     existing.status = "open"

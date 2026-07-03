@@ -266,8 +266,23 @@
           </div>
         </div>
 
-        <!-- item 翻译结果 -->
-        <div v-if="activeItem.content_zh" class="translation-box">
+        <!-- 退货申请内容（独立区块，不复用聊天 message-list） -->
+        <div v-if="activeItem.channel === 'return_claim'" class="return-claim-content">
+          <div class="return-claim-header">退货申请内容</div>
+          <div v-if="activeItem.content_zh" class="translation-box">
+            <div class="translation-title">中文翻译</div>
+            <div>{{ activeItem.content_zh }}</div>
+            <details>
+              <summary class="original-hint">查看俄语原文</summary>
+              <div class="message-text">{{ activeItem.content }}</div>
+            </details>
+          </div>
+          <div v-else-if="activeItem.content" class="message-text">{{ activeItem.content }}</div>
+          <div v-else class="message-text" style="color: #999">（无申请内容）</div>
+        </div>
+
+        <!-- item 翻译结果（非退货） -->
+        <div v-else-if="activeItem.content_zh" class="translation-box">
           <div class="translation-title">中文翻译</div>
           <div>{{ activeItem.content_zh }}</div>
           <details>
@@ -301,7 +316,8 @@
           </div>
         </div>
 
-        <div class="message-list">
+        <!-- 聊天消息列表（退货申请不展示，用独立区块） -->
+        <div v-if="activeItem.channel !== 'return_claim'" class="message-list">
           <div
             v-for="message in activeItem.messages || []"
             :key="message.id"
@@ -337,6 +353,7 @@
             </div>
           </div>
         </div>
+        <!-- /聊天消息列表 -->
 
         <!-- 拒绝原因二级弹窗（置于条件链之外） -->
         <el-dialog v-model="rejectDialogVisible" title="选择拒绝原因" width="420px" :close-on-click-modal="false">
@@ -445,6 +462,7 @@ const replyText = ref('')
 const returnActions = ref([])
 const noteText = ref('')
 const savingNote = ref(false)
+const detailRequestSeq = ref(0)  // 请求序列号，防串详情
 const translatingItem = ref(false)
 const translatingMessageId = ref(null)
 
@@ -664,7 +682,21 @@ async function reload() {
 }
 
 async function selectItem(item) {
+  // 立即清空旧数据，防止串详情
+  activeItem.value = null
+  returnActions.value = []
+  replyText.value = ''
+  noteText.value = ''
+
+  const seq = ++detailRequestSeq.value
   const res = await axios.get(`/api/customer-service/items/${item.id}`)
+
+  // 校验序列号：过期请求不得覆盖 activeItem
+  if (seq !== detailRequestSeq.value) {
+    console.warn(`[CustomerService] 请求序列号过期，丢弃响应 (seq=${seq}, current=${detailRequestSeq.value})`)
+    return
+  }
+
   activeItem.value = res.data
   replyText.value = ''
   noteText.value = res.data.internal_note || ''
@@ -672,6 +704,8 @@ async function selectItem(item) {
   if (res.data.channel === 'return_claim') {
     try {
       const ar = await axios.get(`/api/customer-service/returns/${item.id}/actions`)
+      // 再次校验序列号
+      if (seq !== detailRequestSeq.value) return
       returnActions.value = ar.data.actions || []
     } catch { returnActions.value = [] }
   }
@@ -1719,6 +1753,21 @@ function getReturnSlaClass(item) {
   color: #16a34a;
   font-weight: 600;
   margin-bottom: 6px;
+}
+
+.return-claim-content {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff7f0;
+  border: 1px solid #fed7aa;
+}
+
+.return-claim-header {
+  font-size: 11px;
+  color: #c2410c;
+  font-weight: 600;
+  margin-bottom: 8px;
 }
 
 .handler-box {

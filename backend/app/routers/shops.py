@@ -15,6 +15,7 @@ from fastapi import BackgroundTasks
 from app.routers.auth import get_current_user, get_current_admin
 from app.services.sync_fixed import SyncService
 from app.services.customer_service_sync import CustomerServiceSyncService
+from app.services.sync_lock import SyncLockService
 from app.utils.timezone import format_shanghai_time
 
 router = APIRouter(prefix="/api/shops", tags=["店铺管理"])
@@ -574,6 +575,17 @@ def internal_sync_shop_data(
     if x_internal_api_key != configured_key:
         raise HTTPException(status_code=401, detail="无效的API密钥")
 
+    # 客服同步并发保护
+    if sync_type in ("all", "customer_service"):
+        lock = SyncLockService(db)
+        if lock.is_locked(shop_id, "customer_service"):
+            return {
+                "is_new_shop": False,
+                "success": False,
+                "error": "已有客服同步在进行中，跳过",
+                "results": {}
+            }
+
     return _sync_shop_data_internal(shop_id, sync_type, history, db)
 
 # ============================================================
@@ -587,10 +599,30 @@ def run_sync_job_background(job_id: int, shop_id: int, sync_type: str, history: 
 
     from app.database import SessionLocal
     from app.services.sync_fixed import SyncService
+    from app.services.customer_service_sync import CustomerServiceSyncService
+    from app.services.sync_lock import SyncLockService
     from app.models.models import Shop, SyncJob
 
     db = SessionLocal()
+    lock_acquired = False
     try:
+        # 客服同步并发保护
+        if sync_type in ("all", "customer_service"):
+            lock = SyncLockService(db)
+            lock_acquired = lock.acquire(shop_id, "customer_service")
+            if not lock_acquired:
+                job = db.query(SyncJob).filter(SyncJob.id == job_id).first()
+                if job:
+                    job.status = "skipped"
+                    job.error = "已有客服同步在进行中，跳过"
+                    job.message = "已有客服同步在进行中，跳过"
+                    job.finished_at = datetime.now(ZoneInfo("Asia/Shanghai"))
+                    db.commit()
+                return
+        job = db.query(SyncJob).filter(SyncJob.id == job_id).first()
+        if not job:
+            print(f"[SyncJob {job_id}] 任务不存在")
+            return
         job = db.query(SyncJob).filter(SyncJob.id == job_id).first()
         if not job:
             print(f"[SyncJob {job_id}] 任务不存在")
@@ -732,6 +764,11 @@ def run_sync_job_background(job_id: int, shop_id: int, sync_type: str, history: 
         job.finished_at = datetime.now(ZoneInfo("Asia/Shanghai"))
         db.commit()
     finally:
+        if lock_acquired:
+            try:
+                lock.release()
+            except Exception:
+                pass
         db.close()
 
 

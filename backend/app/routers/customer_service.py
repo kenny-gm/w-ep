@@ -35,6 +35,7 @@ from app.services.ai_client import AIClient, AIClientError
 from app.services.ai_prompt_service import get_active_template, render_template
 from app.services.customer_service_sync import CustomerServiceSyncService
 from app.services.customer_translation_service import CustomerTranslationService
+from app.services.sync_lock import SyncLockService
 from app.services.wb_customer_client import WBCustomerAPIError, WBCustomerClient, WBCustomerRateLimit
 
 
@@ -386,7 +387,13 @@ def sync_customer_service(
         raise HTTPException(status_code=404, detail="未找到可同步的 WB 店铺")
 
     log_ids = []
+    skipped_shops = []
     for shop in shops:
+        # 并发保护：检查是否有活跃锁
+        lock = SyncLockService(db)
+        if lock.is_locked(shop.id, "customer_service"):
+            skipped_shops.append(shop.name)
+            continue
         sync_log = SyncLog(
             shop_id=shop.id,
             sync_type="customer_service",
@@ -399,6 +406,17 @@ def sync_customer_service(
         db.refresh(sync_log)
         log_ids.append(sync_log.id)
         background_tasks.add_task(_run_customer_service_sync_task, shop.id, data.channel, data.days, sync_log.id, data.force_full_sync)
+    msg = f"客服数据同步已开始，稍后刷新收件箱查看结果"
+    if skipped_shops:
+        msg = f"以下店铺已有同步进行中，跳过: {', '.join(skipped_shops)}"
+    return {
+        "success": True,
+        "status": "queued" if not skipped_shops else "partial",
+        "log_ids": log_ids,
+        "count": len(shops) - len(skipped_shops),
+        "skipped": skipped_shops,
+        "message": msg,
+    }
     return {
         "success": True,
         "status": "queued",
@@ -897,9 +915,21 @@ def proxy_customer_service_attachment(
 
 def _run_customer_service_sync_task(shop_id: int, channel: str, days: int, log_id: int, force_full_sync: bool = False) -> None:
     db = SessionLocal()
+    lock = SyncLockService(db)
+    lock_acquired = False
     try:
         shop = db.query(Shop).filter(Shop.id == shop_id, Shop.is_active == True).first()
         if not shop or shop.platform != "wildberries":
+            return
+        # 获取分布式锁
+        lock_acquired = lock.acquire(shop_id, "customer_service")
+        if not lock_acquired:
+            sync_log = db.query(SyncLog).filter(SyncLog.id == log_id).first()
+            if sync_log:
+                sync_log.status = "skipped"
+                sync_log.message = f"已有同步在进行中，跳过（{shop.name}）"
+                sync_log.finished_at = datetime.now(SHANGHAI_TZ)
+                db.commit()
             return
         service = CustomerServiceSyncService(db, shop)
         result = {"questions": None, "feedbacks": None, "chats": None, "return_claims": None}
@@ -975,6 +1005,9 @@ def _run_customer_service_sync_task(shop_id: int, channel: str, days: int, log_i
                 sync_log.finished_at = datetime.now(SHANGHAI_TZ)
                 db.commit()
     finally:
+        if lock_acquired:
+            lock.release()
+        db.close()
         db.close()
 
 
