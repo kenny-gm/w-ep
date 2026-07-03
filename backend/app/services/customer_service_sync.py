@@ -369,6 +369,8 @@ class CustomerServiceSyncService:
         lookup_good_card = (good_card_by_chat_id or {}).get(str(chat_id), {}) if chat_id else {}
         good_card = event_good_card if event_good_card.get("nmID") or event_good_card.get("nmId") else lookup_good_card
         nm_id = rec.get("nmId") or rec.get("nmID") or good_card.get("nmId") or good_card.get("nmID")
+        # 用 nm_id 匹配系统产品，获取 custom_name
+        product = self._find_product(nm_id) if nm_id else None
         text = message_obj.get("text") or rec.get("text") or rec.get("body") or ""
         # WB 聊天接口用 addTimestamp（Unix ms），addTime 是 ISO 字符串
         created_at = self._parse_dt(rec.get("addTimestamp")) or self._parse_dt(rec.get("addTime")) or self._parse_dt(rec.get("createdAt")) or self._parse_dt(rec.get("date"))
@@ -402,11 +404,18 @@ class CustomerServiceSyncService:
             existing.reply_sign = rec.get("replySign") or rec.get("reply_sign") or existing.reply_sign
             # 刷新 raw_json
             existing.raw_json = self._json(rec)
-            # 如果已有聊天但缺 nm_id，用 get_chats 的 goodCard 数据补充
+            # 如果已有聊天但缺 nm_id 或 product_matched=0，用 goodCard 数据补充并重新匹配产品
             lookup_nm = good_card.get("nmID") or good_card.get("nmId")
-            if not existing.nm_id and lookup_nm:
+            if (not existing.nm_id or not existing.product_matched) and lookup_nm:
                 existing.nm_id = lookup_nm
-                existing.product_name = good_card.get("name") or existing.product_name
+                # 尝试匹配产品
+                existing_product = self._find_product(lookup_nm)
+                existing.product_matched = bool(existing_product)
+                if existing_product:
+                    existing.product_name = existing_product.custom_name or existing_product.name
+                    existing.product_name_ru = existing_product.name
+                    existing.sku = existing_product.sku
+                    existing.owner = existing_product.owner
             # 刷新外部更新时间
             if created_at and created_at > (existing.external_updated_at or existing.external_created_at or self._now()):
                 existing.external_updated_at = created_at
@@ -432,7 +441,7 @@ class CustomerServiceSyncService:
             channel="chat",
             external_id=external_id_str,
             nm_id=nm_id,
-            title=good_card.get("name") or good_card.get("title") or "买家聊天",
+            title=(product.custom_name or product.name) if product else (good_card.get("name") or good_card.get("title") or "买家聊天"),
             content=text,
             customer_name=rec.get("clientName") or rec.get("buyerName") or "",
             external_status=rec.get("status") or "",
@@ -441,6 +450,9 @@ class CustomerServiceSyncService:
             external_updated_at=created_at,
             raw=rec,
         )
+        item.product_matched = bool(product)
+        if product:
+            item.product_name_ru = good_card.get("name") or good_card.get("title") or item.product_name_ru
         self._chat_items[external_id_str] = item  # 缓存，防止同批次内重复创建
         self._add_message(
             item=item,
