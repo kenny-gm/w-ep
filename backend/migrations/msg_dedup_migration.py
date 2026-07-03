@@ -1,15 +1,15 @@
 """
 Migration: 添加 message_dedup_key 列并建立唯一索引（幂等版本）
-解决同一 external_message_id 被写入不同 item_id 的历史遗留问题
+修复跨-item消息重复 bug
+重要：此脚本只处理 question/feedback/return_claim 渠道，不处理 chat 渠道
+（chat 消息的 external_message_id 是纯 UUID，无冒号，不能用同样的 WB ID 提取逻辑）
 """
 import sqlite3
 from collections import defaultdict
-from app.database import SessionLocal
+from app.database import engine
 
 
 def upgrade():
-    # 直接连接 sqlite，不走 SQLAlchemy（避免 text() 的 bind parameter 问题）
-    from app.database import engine
     conn = engine.raw_connection()
     cursor = conn.cursor()
     
@@ -65,53 +65,31 @@ def upgrade():
         conn.commit()
         print(f"清理孤儿消息: {cursor.rowcount} 条")
 
-        # Step 3: 清理串频道消息
-        cursor.execute("""
-            DELETE FROM customer_service_messages
-            WHERE message_dedup_key IS NOT NULL
-              AND message_dedup_key != ''
-              AND item_id IN (
-                  SELECT m.id FROM customer_service_messages m
-                  JOIN customer_service_items i ON i.id = m.item_id
-                  WHERE i.channel = 'question'
-                    AND m.external_message_id NOT LIKE '%:question'
-                    AND m.external_message_id NOT LIKE '%:answer'
-              )
-        """)
-        conn.commit()
-        print(f"清理 question 串频道: {cursor.rowcount} 条")
+        # Step 3: 清理串频道消息（只针对 question/feedback/return_claim）
+        # chat 渠道不参与此清理
+        for channel, suffixes in [
+            ('question', ['%:question', '%:answer']),
+            ('feedback', ['%:feedback', '%:answer']),
+            ('return_claim', ['%:return_claim', '%:answer']),
+        ]:
+            keep_patterns = ' OR '.join([f"m.external_message_id LIKE '{s}'" for s in suffixes])
+            cursor.execute(f"""
+                DELETE FROM customer_service_messages
+                WHERE message_dedup_key IS NOT NULL
+                  AND message_dedup_key != ''
+                  AND item_id IN (
+                      SELECT m.id FROM customer_service_messages m
+                      JOIN customer_service_items i ON i.id = m.item_id
+                      WHERE i.channel = '{channel}'
+                        AND ({keep_patterns}) = 0
+                  )
+            """)
+            conn.commit()
+            print(f"清理 {channel} 串频道: {cursor.rowcount} 条")
 
-        cursor.execute("""
-            DELETE FROM customer_service_messages
-            WHERE message_dedup_key IS NOT NULL
-              AND message_dedup_key != ''
-              AND item_id IN (
-                  SELECT m.id FROM customer_service_messages m
-                  JOIN customer_service_items i ON i.id = m.item_id
-                  WHERE i.channel = 'feedback'
-                    AND m.external_message_id NOT LIKE '%:feedback'
-                    AND m.external_message_id NOT LIKE '%:answer'
-              )
-        """)
-        conn.commit()
-        print(f"清理 feedback 串频道: {cursor.rowcount} 条")
-
-        cursor.execute("""
-            DELETE FROM customer_service_messages
-            WHERE message_dedup_key IS NOT NULL
-              AND message_dedup_key != ''
-              AND item_id IN (
-                  SELECT m.id FROM customer_service_messages m
-                  JOIN customer_service_items i ON i.id = m.item_id
-                  WHERE i.channel = 'return_claim'
-                    AND m.external_message_id NOT LIKE '%:return_claim'
-                    AND m.external_message_id NOT LIKE '%:answer'
-              )
-        """)
-        conn.commit()
-        print(f"清理 return_claim 串频道: {cursor.rowcount} 条")
-
-        # Step 4: 清理 WB ID 不匹配的消息
+        # Step 4: 清理 WB ID 不匹配的跨-item重复（只针对 question/feedback/return_claim）
+        # chat 渠道的 external_message_id 是纯 UUID，无冒号，不能用 WB ID 提取逻辑
+        # .chat 渠道通过 message_dedup_key 唯一索引本身就能防止重复，不需要额外清理
         cursor.execute("""
             SELECT m.external_message_id, m.item_id, i.external_id, i.channel
             FROM customer_service_messages m
@@ -120,6 +98,8 @@ def upgrade():
               AND m.external_message_id != ''
               AND m.message_dedup_key IS NOT NULL
               AND m.message_dedup_key != ''
+              AND i.channel IN ('question', 'feedback', 'return_claim')
+            ORDER BY m.external_message_id, m.item_id
         """)
         all_rows = cursor.fetchall()
 
@@ -128,13 +108,14 @@ def upgrade():
             ext_to_msgs[ext_id].append({'item_id': item_id, 'item_ext': item_ext, 'item_channel': item_channel})
 
         cross_exts = {k: v for k, v in ext_to_msgs.items() if len(set(m['item_id'] for m in v)) > 1}
-        print(f"跨 item external_message_id: {len(cross_exts)}")
+        print(f"跨 item external_message_id（question/feedback/return_claim）: {len(cross_exts)}")
 
         to_delete = []
         for ext_id, msgs in cross_exts.items():
+            # 提取 WB ID（最后一个冒号后面的类型后缀）
             last_colon = ext_id.rfind(':')
             if last_colon == -1:
-                continue
+                continue  # 没有冒号，跳过（不处理 chat 类型的 UUID）
             wb_id = ext_id[:last_colon]
             
             correct_item_id = None
@@ -211,29 +192,18 @@ def upgrade():
                 FROM customer_service_messages m
                 JOIN customer_service_items i ON i.id = m.item_id
                 WHERE m.external_message_id IS NOT NULL AND m.external_message_id != ''
+                  AND i.channel IN ('question', 'feedback', 'return_claim')
                 GROUP BY m.external_message_id
                 HAVING COUNT(DISTINCT m.item_id) > 1
             )
         """)
         cross_item = cursor.fetchone()[0]
-        print(f"跨 item 重复: {cross_item}")
+        print(f"跨 item 重复（question/feedback/return_claim）: {cross_item}")
 
         cursor.execute("SELECT COUNT(*) FROM customer_service_messages")
         total = cursor.fetchone()[0]
         print(f"总消息数: {total}")
 
-    finally:
-        conn.close()
-
-
-def downgrade():
-    from app.database import engine
-    conn = engine.raw_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("DROP INDEX IF EXISTS ix_msg_dedup_key")
-        conn.commit()
-        print("已删除唯一索引 ix_msg_dedup_key")
     finally:
         conn.close()
 
