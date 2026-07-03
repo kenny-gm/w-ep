@@ -6,7 +6,7 @@
         <span>问答、评价、聊天、退货申请</span>
       </div>
       <div class="toolbar-actions" v-if="canManage">
-        <el-button :loading="syncing" @click="syncCustomerService">同步客服数据</el-button>
+        <el-button v-if="hasCSperm('customer_service:sync')" :loading="syncing" @click="syncCustomerService">同步客服数据</el-button>
       </div>
     </div>
 
@@ -156,6 +156,13 @@
                 >
                   {{ getDisplayStatus(item).label }}
                 </span>
+                <span
+                  v-if="item.channel === 'return_claim'"
+                  class="queue-card-wait-time"
+                  :class="getReturnSlaClass(item)"
+                >
+                  {{ getReturnSlaText(item) }}
+                </span>
                 <span v-if="item.risk_level === 'urgent'" class="queue-card-risk risk-urgent">紧急</span>
                 <span v-else-if="item.risk_level === 'high'" class="queue-card-risk risk-high">高风险</span>
               </div>
@@ -246,8 +253,8 @@
 
           <!-- 右侧操作按钮 ────────────────────────── -->
           <div class="detail-actions">
-            <el-button size="small" plain :loading="translatingItem" @click="translateItem">翻译事项</el-button>
-            <el-dropdown @command="handleStatusCommand" size="small">
+            <el-button v-if="hasCSperm('customer_service:translate')" size="small" plain :loading="translatingItem" @click="translateItem">翻译内容</el-button>
+            <el-dropdown v-if="hasCSperm('customer_service:status')" @command="handleStatusCommand" size="small">
               <el-button plain size="small">处理状态</el-button>
               <template #dropdown>
                 <el-dropdown-menu v-if="activeItem.channel === 'chat'">
@@ -312,7 +319,7 @@
           </div>
           <el-input v-model="noteText" type="textarea" :rows="3" maxlength="5000" show-word-limit placeholder="记录客户要求、协商状态、后续跟进事项。" />
           <div class="internal-note-actions">
-            <el-button size="small" :loading="savingNote" @click="saveInternalNote">保存备注</el-button>
+            <el-button v-if="hasCSperm('customer_service:note')" size="small" :loading="savingNote" @click="saveInternalNote">保存备注</el-button>
           </div>
         </div>
 
@@ -327,7 +334,7 @@
               <strong>{{ message.direction === 'seller' ? '客服' : '买家' }}</strong>
               <span>{{ message.created_at_external || message.created_at }}</span>
               <el-button
-                v-if="message.direction !== 'seller'"
+                v-if="message.direction !== 'seller' && hasCSperm('customer_service:translate')"
                 size="small"
                 text
                 type="primary"
@@ -392,7 +399,7 @@
           </template>
         </el-dialog>
 
-        <div v-if="activeItem.channel === 'return_claim'" class="return-actions">
+        <div v-if="activeItem.channel === 'return_claim' && hasCSperm('customer_service:handle_return')" class="return-actions">
           <div class="return-note">
             买家退货申请需在发起后 120 小时内处理，超时将自动批准。
           </div>
@@ -410,9 +417,9 @@
 
         <div v-else class="reply-box">
           <div class="reply-toolbar">
-            <el-button v-if="activeItem.channel === 'question' && activeItem.reply_status !== 'answered'" 
+            <el-button v-if="activeItem.channel === 'question' && activeItem.reply_status !== 'answered' && hasCSperm('customer_service:reject_question')" 
               type="warning" :loading="rejectingQuestion" @click="rejectQuestion">拒绝问题</el-button>
-            <el-button :loading="drafting" @click="generateDraft">生成俄语草稿</el-button>
+            <el-button v-if="hasCSperm('customer_service:ai_draft')" :loading="drafting" @click="generateDraft">生成俄语草稿</el-button>
             <span>AI 只生成草稿，发送前必须人工确认。</span>
           </div>
           <el-input
@@ -423,7 +430,9 @@
           />
           <div class="reply-actions">
             <el-button @click="replyText = ''">清空</el-button>
-            <el-button type="primary" :loading="sending" @click="sendReply">
+            <el-button
+              v-if="(activeItem.channel === 'feedback' && hasCSperm('customer_service:reply_feedback')) || (activeItem.channel === 'question' && hasCSperm('customer_service:answer_question')) || (activeItem.channel === 'chat' && hasCSperm('customer_service:send_chat'))"
+              type="primary" :loading="sending" @click="sendReply">
               {{ activeItem.reply_status === 'answered' ? '修改回复' : '发送回复' }}
             </el-button>
           </div>
@@ -476,6 +485,26 @@ const filters = reactive({
 })
 
 const canManage = computed(() => ['admin', 'manager'].includes(authStore.user?.role))
+
+// 客服细粒度权限 helpers
+const csPermissions = computed(() => {
+  const perms = authStore.user?.permissions || []
+  if (authStore.user?.role === 'admin') return new Set(['*'])
+  return new Set(perms)
+})
+
+function hasCSperm(perm) {
+  if (csPermissions.value.has('*')) return true
+  if (csPermissions.value.has(perm)) return true
+  // 通配支持
+  const [prefix] = perm.split(':')
+  return [...csPermissions.value].some(p => p.startsWith(prefix + ':') && p.endsWith('*'))
+}
+
+function hasCSChannelPerm(channel, basePerm) {
+  // 某些权限不需要 channel 判断
+  return hasCSperm(basePerm)
+}
 
 const QUICK_KEY_MAP = {
   feedback_low_bad_unanswered: '差评待回复',
@@ -1437,6 +1466,35 @@ function getReturnSlaClass(item) {
   font-size: 12px;
   font-weight: 700;
   line-height: 1.4;
+}
+
+.queue-card-wait-time {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: #64748b;
+  background: #f1f5f9;
+  white-space: nowrap;
+}
+
+.queue-card-wait-time.warning {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.queue-card-wait-time.danger {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.queue-card-wait-time.success {
+  color: #15803d;
+  background: #dcfce7;
 }
 
 .queue-card-time {

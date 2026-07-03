@@ -13,6 +13,7 @@ services:
       - APP_ENV=production
       - SECRET_KEY=${SECRET_KEY}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - SYNC_ENABLED=true
     networks:
       - wb-erp_wb-erp-network
 

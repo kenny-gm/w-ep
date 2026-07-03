@@ -10,10 +10,14 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "admin"      # 管理员
-    FINANCE = "finance"  # 财务
-    MANAGER = "manager"  # 经理
-    STAFF = "staff"      # 员工
+    ADMIN = "admin"            # 管理员
+    FINANCE = "finance"        # 财务
+    MANAGER = "manager"        # 经理
+    STAFF = "staff"            # 员工
+    CUSTOMER_SERVICE = "customer_service"  # 客服
+    PRODUCT_OWNER = "product_owner"         # 产品负责人
+    VIEWER = "viewer"          # 查看者
+    CUSTOM = "custom"          # 自定义
 
 
 class User(Base):
@@ -29,6 +33,8 @@ class User(Base):
     # 权限配置
     allowed_menus = Column(JSON, default=list)  # 可访问的菜单key列表
     allowed_owners = Column(JSON, default=list)  # 可查看的负责人列表
+    permissions = Column(JSON, default=list)  # 细粒度权限码数组
+    allowed_shops = Column(JSON, default=list)  # 可访问的店铺ID列表
     created_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")))
     updated_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")), onupdate=lambda ctx: datetime.now(ZoneInfo("Asia/Shanghai")))
     
@@ -471,6 +477,8 @@ class CustomerServiceMessage(Base):
     id = Column(Integer, primary_key=True, index=True)
     item_id = Column(Integer, ForeignKey("customer_service_items.id"), nullable=False)
     external_message_id = Column(String(120), nullable=True)
+    # 去重键：shop_id:channel:external_message_id，同一 WB 消息在相同 shop+channel 下唯一
+    message_dedup_key = Column(String(200), nullable=True)
     direction = Column(String(20), default="buyer")  # buyer/seller/system
     sender_type = Column(String(50), default="")
     sender_name = Column(String(200), default="")

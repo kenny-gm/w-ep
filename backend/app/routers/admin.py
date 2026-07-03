@@ -14,6 +14,49 @@ from app.routers.auth import get_current_admin, get_password_hash
 
 router = APIRouter(prefix="/api/admin", tags=["后台管理"])
 
+CS_MENU_KEY = "customer-service"
+
+
+def _sync_cs_menu_perms(update_data: dict) -> None:
+    """
+    权限与菜单一致性兜底：
+    1. permissions 包含 customer_service:* 写权限但不包含 read → 自动补上 read
+    2. permissions 不含 read → 从 allowed_menus 移除 customer-service
+    3. allowed_menus 包含 customer-service 但 permissions 无 read → 从菜单移除
+    """
+    permissions = update_data.get("permissions")
+    allowed_menus = update_data.get("allowed_menus")
+
+    if permissions is None and allowed_menus is None:
+        return
+
+    # 规范化
+    perms = permissions if permissions is not None else []
+    menus = allowed_menus if allowed_menus is not None else []
+
+    cs_perms = [p for p in perms if isinstance(p, str) and p.startswith("customer_service:")]
+    has_read = "customer_service:read" in cs_perms
+    has_cs_write = any(p != "customer_service:read" for p in cs_perms)
+    has_cs_menu = CS_MENU_KEY in menus
+
+    changed = False
+
+    # 1. 有写权限但没有 read → 自动补上 read
+    if has_cs_write and not has_read:
+        if permissions is not None:
+            update_data["permissions"] = ["customer_service:read"] + list(perms)
+            changed = True
+
+    # 重新计算
+    cs_perms = [p for p in update_data.get("permissions", perms) if isinstance(p, str) and p.startswith("customer_service:")]
+    has_read = "customer_service:read" in cs_perms
+
+    # 2. permissions 无 read → 从菜单移除 customer-service
+    if not has_read and has_cs_menu:
+        if allowed_menus is not None:
+            update_data["allowed_menus"] = [m for m in menus if m != CS_MENU_KEY]
+            changed = True
+
 
 # ========== 用户管理 ==========
 
@@ -24,6 +67,7 @@ class UserCreateAdmin(BaseModel):
     role: str = "staff"
     allowed_menus: Optional[List[str]] = None
     allowed_owners: Optional[List[str]] = None
+    permissions: Optional[List[str]] = None
 
 
 class UserUpdateAdmin(BaseModel):
@@ -32,6 +76,7 @@ class UserUpdateAdmin(BaseModel):
     is_active: Optional[bool] = None
     allowed_menus: Optional[List[str]] = None
     allowed_owners: Optional[List[str]] = None
+    permissions: Optional[List[str]] = None
 
 
 class UserResponse(BaseModel):
@@ -42,8 +87,10 @@ class UserResponse(BaseModel):
     is_active: bool
     allowed_menus: Optional[List[str]]
     allowed_owners: Optional[List[str]]
+    permissions: Optional[List[str]]
+    allowed_shops: Optional[List[int]]
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -88,15 +135,23 @@ def create_user(
         role = UserRole(data.role)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"无效的角色: {data.role}")
-    
+
+    # 权限与菜单一致性兜底
+    create_data = {
+        "permissions": data.permissions or [],
+        "allowed_menus": data.allowed_menus or [],
+    }
+    _sync_cs_menu_perms(create_data)
+
     user = User(
         username=data.username,
         email=None,
         hashed_password=get_password_hash(data.password),
         role=role,
         is_active=True,
-        allowed_menus=data.allowed_menus or [],
-        allowed_owners=data.allowed_owners or []
+        allowed_owners=data.allowed_owners or [],
+        permissions=create_data["permissions"],
+        allowed_menus=create_data["allowed_menus"],
     )
     
     db.add(user)
@@ -117,15 +172,19 @@ def update_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    
+
     update_data = data.dict(exclude_unset=True)
     if "role" in update_data:
         update_data["role"] = UserRole(update_data["role"])
-    
+
+    # ── 权限与菜单一致性兜底 ───────────────────────
+    _sync_cs_menu_perms(update_data)
+    # ── ──────────────────────────────────────────
+
     for key, value in update_data.items():
         if value is not None:
             setattr(user, key, value)
-    
+
     db.commit()
     db.refresh(user)
     return user

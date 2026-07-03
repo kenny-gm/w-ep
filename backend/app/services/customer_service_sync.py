@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.models.models import (
     CustomerServiceItem,
@@ -592,25 +593,41 @@ class CustomerServiceSyncService:
     ) -> None:
         if not external_message_id:
             external_message_id = f"{item.external_id}:{direction}:{created_at_external or self._now()}"
+        # 生成去重键：shop_id:channel:external_message_id
+        dedup_key = f"{item.shop_id}:{item.channel}:{external_message_id}"
         existing = self.db.query(CustomerServiceMessage).filter(
-            CustomerServiceMessage.item_id == item.id,
-            CustomerServiceMessage.external_message_id == external_message_id,
+            CustomerServiceMessage.message_dedup_key == dedup_key,
         ).first() if item.id else None
         if existing:
             existing.message_text = text or existing.message_text
             existing.attachments_json = self._json(attachments)
             existing.raw_json = self._json(raw)
             return
-        self.db.add(CustomerServiceMessage(
+        msg = CustomerServiceMessage(
             item=item,
             external_message_id=external_message_id,
+            message_dedup_key=dedup_key,
             direction=direction,
             sender_type=direction,
             message_text=text or "",
             attachments_json=self._json(attachments),
             created_at_external=created_at_external,
             raw_json=self._json(raw),
-        ))
+        )
+        try:
+            self.db.add(msg)
+            self.db.flush()
+        except IntegrityError:
+            self.db.rollback()
+            # 并发写入冲突，重新查询并更新
+            existing = self.db.query(CustomerServiceMessage).filter(
+                CustomerServiceMessage.message_dedup_key == dedup_key,
+            ).first()
+            if existing:
+                existing.message_text = text or existing.message_text
+                existing.attachments_json = self._json(attachments)
+                existing.raw_json = self._json(raw)
+                return
 
     def _paged_feedbacks_api(self, fetcher) -> Iterable[Dict[str, Any]]:
         take = 100

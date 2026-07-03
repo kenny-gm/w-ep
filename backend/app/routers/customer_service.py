@@ -37,6 +37,13 @@ from app.services.customer_service_sync import CustomerServiceSyncService
 from app.services.customer_translation_service import CustomerTranslationService
 from app.services.sync_lock import SyncLockService
 from app.services.wb_customer_client import WBCustomerAPIError, WBCustomerClient, WBCustomerRateLimit
+from app.utils.permissions import (
+    filter_customer_query,
+    can_access_customer_item,
+    require_cs_permission,
+    has_permission,
+)
+from app.utils.permissions import _role as _cs_role, _user_allowed_owners, _user_allowed_shops  # noqa: F401
 
 
 router = APIRouter(prefix="/api/customer-service", tags=["客服工作台"])
@@ -81,6 +88,7 @@ def get_customer_service_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_cs_permission(current_user, "customer_service:read")
     query = _visible_query(db.query(CustomerServiceItem), current_user)
     if shop_id:
         query = query.filter(CustomerServiceItem.shop_id == shop_id)
@@ -200,6 +208,7 @@ def list_customer_service_items(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_cs_permission(current_user, "customer_service:read")
     query = _visible_query(db.query(CustomerServiceItem), current_user)
     query = query.filter(CustomerServiceItem.is_archived == False)
 
@@ -353,6 +362,7 @@ def get_customer_service_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_cs_permission(current_user, "customer_service:read")
     item = _get_visible_item(db, item_id, current_user)
     return _serialize_item(item, include_messages=True, include_actions=True)
 
@@ -364,6 +374,7 @@ def get_related_items(
     current_user: User = Depends(get_current_user),
 ):
     """跨渠道聚合已禁用，WB 无稳定跨渠道买家ID，始终返回空列表（保留权限检查和404行为）"""
+    require_cs_permission(current_user, "customer_service:read")
     _get_visible_item(db, item_id, current_user)  # 权限验证，item不存在或无权访问时抛404
     return {"items": []}
 
@@ -375,7 +386,7 @@ def sync_customer_service(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_manager(current_user)
+    require_cs_permission(current_user, "customer_service:sync")
     shops_query = db.query(Shop).filter(
         Shop.is_active == True,
         Shop.platform == "wildberries",
@@ -433,7 +444,7 @@ def get_sync_status(
     current_user: User = Depends(get_current_user),
 ):
     """查询客服同步任务状态，前端轮询使用"""
-    _require_manager(current_user)
+    require_cs_permission(current_user, "customer_service:sync")
     sync_log = db.query(SyncLog).filter(SyncLog.id == log_id).first()
     if not sync_log:
         raise HTTPException(status_code=404, detail="同步记录不存在")
@@ -454,7 +465,7 @@ def check_customer_service_permission(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_manager(current_user)
+    require_cs_permission(current_user, "customer_service:sync")
     shop = db.query(Shop).filter(Shop.id == shop_id, Shop.is_active == True).first()
     if not shop:
         raise HTTPException(status_code=404, detail="店铺不存在")
@@ -469,6 +480,7 @@ def generate_ai_reply_draft(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_cs_permission(current_user, "customer_service:ai_draft")
     item = _get_visible_item(db, item_id, current_user)
     try:
         template = get_active_template(db, "customer_reply")
@@ -556,6 +568,7 @@ def translate_customer_service_item(
     current_user: User = Depends(get_current_user),
 ):
     """手动翻译客服事项（手动触发，不自动翻译）"""
+    require_cs_permission(current_user, "customer_service:translate")
     item = _get_visible_item(db, item_id, current_user)
     service = CustomerTranslationService(db)
     result = service.translate_item(item)
@@ -563,7 +576,7 @@ def translate_customer_service_item(
         db,
         item,
         current_user,
-        "translate",
+        "translate_item",
         request={"target": "item"},
         response={k: v for k, v in result.items() if k not in ("content_zh",)},
         success=result.get("success", False),
@@ -588,6 +601,7 @@ def translate_customer_service_message(
         raise HTTPException(status_code=404, detail="消息不存在")
     # 权限校验：通过 item 访问权限
     _get_visible_item(db, message.item_id, current_user)
+    require_cs_permission(current_user, "customer_service:translate")
     service = CustomerTranslationService(db)
     result = service.translate_message(message)
     _record_action(
@@ -618,6 +632,15 @@ def reply_customer_service_item(
         raise HTTPException(status_code=400, detail="回复草稿含中文，请改为俄语后发送")
 
     item = _get_visible_item(db, item_id, current_user)
+    # 按 channel 检查写权限
+    if item.channel == "question":
+        require_cs_permission(current_user, "customer_service:answer_question")
+    elif item.channel == "feedback":
+        require_cs_permission(current_user, "customer_service:reply_feedback")
+    elif item.channel == "chat":
+        require_cs_permission(current_user, "customer_service:send_chat")
+    else:
+        raise HTTPException(status_code=400, detail="该类型不支持此操作")
     client = WBCustomerClient(item.shop.api_token)
     response: Dict[str, Any] = {}
     action_type = "reply"
@@ -716,6 +739,7 @@ def update_customer_service_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_cs_permission(current_user, "customer_service:status")
     allowed = {"open", "pending_internal", "replied", "closed", "archived"}
     allowed_reply_status = {"unanswered", "answered", "failed"}
     if data.status not in allowed:
@@ -750,6 +774,7 @@ def update_customer_service_internal_note(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_cs_permission(current_user, "customer_service:note")
     item = _get_visible_item(db, item_id, current_user)
     if item.channel not in ("chat", "return_claim"):
         raise HTTPException(status_code=400, detail="仅买家聊天和买家退货支持客服备注")
@@ -761,7 +786,7 @@ def update_customer_service_internal_note(
     item.internal_note_updated_by = current_user.username
     item.internal_note_updated_at = _now()
     _touch_handled(item, current_user)
-    _record_action(db, item, current_user, "update_internal_note", request={
+    _record_action(db, item, current_user, "note_update", request={
         "old_note_length": len(old_note),
         "new_note_length": len(note),
         "new_note_preview": note[:80] if note else "",
@@ -778,6 +803,7 @@ def answer_return_claim(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_cs_permission(current_user, "customer_service:handle_return")
     item = _get_visible_item(db, item_id, current_user)
     if item.channel != "return_claim":
         raise HTTPException(status_code=400, detail="不是退货申请")
@@ -816,6 +842,7 @@ def get_return_claim_actions(
     current_user: User = Depends(get_current_user),
 ):
     """返回退货申请的可用操作按钮列表，对应WB卖家后台的3个选项"""
+    require_cs_permission(current_user, "customer_service:read")
     item = _get_visible_item(db, item_id, current_user)
     if item.channel != "return_claim":
         raise HTTPException(status_code=400, detail="不是退货申请")
@@ -845,6 +872,7 @@ def reject_question(
     current_user: User = Depends(get_current_user),
 ):
     """拒绝问题"""
+    require_cs_permission(current_user, "customer_service:reject_question")
     item = _get_visible_item(db, item_id, current_user)
     if item.channel != "question":
         raise HTTPException(status_code=400, detail="不是问答")
@@ -875,6 +903,7 @@ def mark_customer_service_item_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_cs_permission(current_user, "customer_service:read")
     item = _get_visible_item(db, item_id, current_user)
     item.is_viewed = True
     _touch_handled(item, current_user)
@@ -889,6 +918,7 @@ def proxy_customer_service_attachment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_cs_permission(current_user, "customer_service:read")
     message = db.query(CustomerServiceMessage).filter(
         CustomerServiceMessage.attachments_json.contains(download_id)
     ).first()
@@ -1012,16 +1042,8 @@ def _run_customer_service_sync_task(shop_id: int, channel: str, days: int, log_i
 
 
 def _visible_query(query, current_user: User):
-    if _is_admin(current_user):
-        return query
-    owners = _allowed_owners(current_user)
-    # 空数组 allowed_owners=[] 沿用系统语义：表示"可查看全部"，不过滤
-    if owners:
-        return query.filter(or_(
-            CustomerServiceItem.owner.in_(owners),
-            CustomerServiceItem.assigned_owner.in_(owners),
-        ))
-    return query
+    """兼容旧函数，内部委托到 permissions.filter_customer_query"""
+    return filter_customer_query(current_user, query)
 
 
 def _get_visible_item(db: Session, item_id: int, current_user: User) -> CustomerServiceItem:
@@ -1030,6 +1052,8 @@ def _get_visible_item(db: Session, item_id: int, current_user: User) -> Customer
         current_user,
     ).filter(CustomerServiceItem.id == item_id).first()
     if not item:
+        raise HTTPException(status_code=404, detail="客服事项不存在或无权限")
+    if not can_access_customer_item(current_user, item):
         raise HTTPException(status_code=404, detail="客服事项不存在或无权限")
     return item
 
@@ -1233,8 +1257,8 @@ def _record_action(
         item_id=item.id,
         user_id=user.id,
         action_type=action_type,
-        request_json=_json(request or {}),
-        response_json=_json(response or {}),
+        request_json=_json(_audit_sanitize(request or {})),
+        response_json=_json(_audit_sanitize(response or {})),
         success=success,
         error=error,
         first_response=first_response,
@@ -1290,6 +1314,27 @@ def _contains_cjk(text: str) -> bool:
 
 def _raw(item: CustomerServiceItem) -> Dict[str, Any]:
     return _json_loads(item.raw_json, {})
+
+
+def _audit_sanitize(data: Any, depth: int = 0) -> Any:
+    """审计日志脱敏：长字符串截断至 80 字，移除 Authorization/Token 等敏感字段"""
+    if depth > 5:
+        return "<max_depth>"
+    if isinstance(data, dict):
+        SENSITIVE_KEYS = {"authorization", "token", "api_key", "apikey", "password", "secret", "header"}
+        result = {}
+        for k, v in data.items():
+            k_lower = k.lower()
+            if k_lower in SENSITIVE_KEYS:
+                result[k] = "<redacted>"
+            else:
+                result[k] = _audit_sanitize(v, depth + 1)
+        return result
+    if isinstance(data, (list, tuple)):
+        return [_audit_sanitize(v, depth + 1) for v in data[:50]]  # 最多 50 项
+    if isinstance(data, str) and len(data) > 80:
+        return data[:80] + "..."
+    return data
 
 
 def _json(value: Any) -> str:

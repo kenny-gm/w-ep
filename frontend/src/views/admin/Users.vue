@@ -83,10 +83,39 @@
         
         <!-- 权限配置 -->
         <el-divider v-if="editMode">权限配置</el-divider>
-        
+
+        <!-- 客服权限级别 -->
+        <el-form-item v-if="editMode" label="客服权限">
+          <el-radio-group v-model="userForm.csPermissionLevel" @change="handleCsLevelChange">
+            <el-radio-button value="none">无权限</el-radio-button>
+            <el-radio-button value="read">只读</el-radio-button>
+            <el-radio-button value="write">读写</el-radio-button>
+            <el-radio-button value="custom">自定义</el-radio-button>
+          </el-radio-group>
+          <div class="form-tip">无权限：无法使用客服工作台 | 只读：可查看不能操作 | 读写：可执行常用客服操作 | 自定义：手动勾选具体权限</div>
+        </el-form-item>
+
+        <!-- 自定义权限勾选区 -->
+        <el-form-item v-if="editMode && userForm.csPermissionLevel === 'custom'" label="">
+          <div class="cs-perm-grid">
+            <el-checkbox
+              v-for="perm in CS_PERM_OPTIONS"
+              :key="perm.value"
+              :label="perm.value"
+              v-model="userForm.csCustomPerms"
+            >{{ perm.label }}</el-checkbox>
+          </div>
+        </el-form-item>
+
         <el-form-item v-if="editMode" label="可访问菜单">
           <el-select v-model="userForm.allowed_menus" multiple clearable placeholder="留空则可访问全部" style="width: 100%">
-            <el-option v-for="menu in authStore.availableMenus" :key="menu.key" :label="menu.name" :value="menu.key" />
+            <el-option
+              v-for="menu in authStore.availableMenus"
+              :key="menu.key"
+              :label="menu.name"
+              :value="menu.key"
+              :disabled="menu.key === CS_MENU_KEY && userForm.csPermissionLevel === 'none'"
+            />
           </el-select>
           <div class="form-tip">留空则可访问全部菜单</div>
         </el-form-item>
@@ -128,7 +157,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { useAuthStore } from '../../stores/auth'
@@ -167,8 +196,117 @@ const userForm = reactive({
   role: 'staff',
   is_active: true,
   allowed_menus: [],
-  allowed_owners: []
+  allowed_owners: [],
+  // 客服权限
+  csPermissionLevel: 'none',  // none / read / write / custom
+  csCustomPerms: [],
 })
+
+// 客服权限选项（自定义勾选区）
+const CS_PERM_OPTIONS = [
+  { value: 'customer_service:read', label: '查看客服工作台' },
+  { value: 'customer_service:sync', label: '同步客服数据' },
+  { value: 'customer_service:translate', label: '翻译内容' },
+  { value: 'customer_service:ai_draft', label: 'AI生成草稿' },
+  { value: 'customer_service:note', label: '写客服备注' },
+  { value: 'customer_service:status', label: '修改处理状态' },
+  { value: 'customer_service:reply_feedback', label: '回复/修改评价' },
+  { value: 'customer_service:answer_question', label: '回答/修改问答' },
+  { value: 'customer_service:reject_question', label: '拒绝问答' },
+  { value: 'customer_service:send_chat', label: '发送买家聊天' },
+  { value: 'customer_service:handle_return', label: '处理退货' },
+  { value: 'customer_service:admin', label: '客服管理（数据范围豁免）' },
+]
+
+// 读写权限全集（不含 admin）
+const CS_READ_WRITE_PERMS = [
+  'customer_service:read',
+  'customer_service:sync',
+  'customer_service:translate',
+  'customer_service:ai_draft',
+  'customer_service:note',
+  'customer_service:status',
+  'customer_service:reply_feedback',
+  'customer_service:answer_question',
+  'customer_service:reject_question',
+  'customer_service:send_chat',
+  'customer_service:handle_return',
+]
+
+// 从 permissions 数组推断 csPermissionLevel
+function inferCsLevel(perms) {
+  if (!perms || perms.length === 0) return 'none'
+  const csPerms = perms.filter(p => p.startsWith('customer_service:'))
+  if (csPerms.length === 0) return 'none'
+  if (csPerms.length === 1 && csPerms[0] === 'customer_service:read') return 'read'
+  // 检查是否等于读写全集（不含 admin，顺序无关）
+  const writeablePerms = csPerms.filter(p => p !== 'customer_service:admin')
+  if (writeablePerms.length === CS_READ_WRITE_PERMS.length &&
+      CS_READ_WRITE_PERMS.every(p => writeablePerms.includes(p))) return 'write'
+  return 'custom'
+}
+
+const CS_MENU_KEY = 'customer-service'
+
+// csPermissionLevel 变化时更新 csCustomPerms 和 allowed_menus
+function handleCsLevelChange(level) {
+  if (level === 'none') {
+    userForm.csCustomPerms = []
+    // 从 allowed_menus 移除客服工作台
+    userForm.allowed_menus = userForm.allowed_menus.filter(m => m !== CS_MENU_KEY)
+  } else if (level === 'read') {
+    userForm.csCustomPerms = ['customer_service:read']
+    // 自动加入客服工作台菜单
+    if (!userForm.allowed_menus.includes(CS_MENU_KEY)) {
+      userForm.allowed_menus.push(CS_MENU_KEY)
+    }
+  } else if (level === 'write') {
+    userForm.csCustomPerms = [...CS_READ_WRITE_PERMS]
+    // 自动加入客服工作台菜单
+    if (!userForm.allowed_menus.includes(CS_MENU_KEY)) {
+      userForm.allowed_menus.push(CS_MENU_KEY)
+    }
+  }
+  // custom: 保持现有 csCustomPerms 不变，allowed_menus 跟随 csCustomPerms 变化（见 watch）
+}
+
+// 监听 csCustomPerms 变化（仅 custom 模式）：自动同步 allowed_menus
+watch(() => userForm.csCustomPerms.slice(), (newPerms) => {
+  if (userForm.csPermissionLevel !== 'custom') return
+  const hasRead = newPerms.includes('customer_service:read')
+  const hasCsWrite = newPerms.some(p =>
+    p.startsWith('customer_service:') && p !== 'customer_service:read'
+  )
+  if (hasRead) {
+    // 有 read → 加入客服工作台菜单
+    if (!userForm.allowed_menus.includes(CS_MENU_KEY)) {
+      userForm.allowed_menus.push(CS_MENU_KEY)
+    }
+  } else if (hasCsWrite) {
+    // 有写权限但没有 read → 补上 read（自动修复无效组合）
+    userForm.csCustomPerms = ['customer_service:read', ...newPerms]
+  } else {
+    // 既没有 read 也没有写权限 → 移除客服工作台菜单
+    userForm.allowed_menus = userForm.allowed_menus.filter(m => m !== CS_MENU_KEY)
+  }
+})
+
+// 将 csPermissionLevel + csCustomPerms 转换为要提交的 permissions 数组
+function buildCsPermissions() {
+  const { csPermissionLevel, csCustomPerms } = userForm
+  if (csPermissionLevel === 'none') return []
+  if (csPermissionLevel === 'read') return ['customer_service:read']
+  if (csPermissionLevel === 'write') return [...CS_READ_WRITE_PERMS]
+  if (csPermissionLevel === 'custom') {
+    // 自动补上 read（防止只有写权限没有 read 的无效组合）
+    const hasRead = csCustomPerms.includes('customer_service:read')
+    if (!hasRead && csCustomPerms.some(p => p.startsWith('customer_service:'))) {
+      return ['customer_service:read', ...csCustomPerms]
+    }
+    return [...csCustomPerms]
+  }
+  return []
+}
 
 const resetForm = reactive({
   new_password: '',
@@ -234,6 +372,10 @@ function handleRoleChange(role) {
   if (role === 'finance') {
     userForm.allowed_menus = ['dashboard', 'orders', 'ads', 'finance']
   }
+  // 切换角色时重置客服权限级别和菜单
+  userForm.csPermissionLevel = 'none'
+  userForm.csCustomPerms = []
+  userForm.allowed_menus = []
 }
 
 async function fetchUsers() {
@@ -258,7 +400,9 @@ function openCreateDialog() {
     role: 'staff',
     is_active: true,
     allowed_menus: [],
-    allowed_owners: []
+    allowed_owners: [],
+    csPermissionLevel: 'none',
+    csCustomPerms: [],
   })
   showCreateDialog.value = true
 }
@@ -271,7 +415,10 @@ function editUser(user) {
     role: user.role,
     is_active: user.is_active,
     allowed_menus: user.allowed_menus || [],
-    allowed_owners: user.allowed_owners || []
+    allowed_owners: user.allowed_owners || [],
+    // 客服权限：从 permissions 推断级别
+    csPermissionLevel: inferCsLevel(user.permissions),
+    csCustomPerms: (user.permissions || []).filter(p => p.startsWith('customer_service:')),
   })
   showCreateDialog.value = true
 }
@@ -286,7 +433,8 @@ async function saveUser() {
       role: userForm.role,
       is_active: userForm.is_active,
       allowed_menus: userForm.allowed_menus,
-      allowed_owners: userForm.allowed_owners
+      allowed_owners: userForm.allowed_owners,
+      permissions: buildCsPermissions(),
     }
     
     if (editMode.value) {
@@ -381,5 +529,12 @@ onMounted(() => {
   font-size: 12px;
   color: #909399;
   margin-top: 5px;
+}
+
+.cs-perm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+  padding: 4px 0;
 }
 </style>
