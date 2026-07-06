@@ -276,6 +276,35 @@
         <!-- 退货申请内容（独立区块，不复用聊天 message-list） -->
         <div v-if="activeItem.channel === 'return_claim'" class="return-claim-content">
           <div class="return-claim-header">退货申请内容</div>
+
+          <!-- 买家上传的附件图片 -->
+          <div v-if="activeItem.raw_json?.photos?.length" class="return-attachments">
+            <div class="return-attachments-title">买家上传照片</div>
+            <div class="return-photos">
+              <img
+                v-for="(photo, idx) in activeItem.raw_json.photos"
+                :key="idx"
+                :src="'https:' + photo"
+                class="return-photo-thumb"
+                @click="openAttachment({url: 'https:' + photo})"
+              />
+            </div>
+          </div>
+
+          <!-- 买家上传的视频 -->
+          <div v-if="activeItem.raw_json?.video_paths?.length" class="return-attachments">
+            <div class="return-attachments-title">买家上传视频</div>
+            <div class="return-videos">
+              <video
+                v-for="(video, idx) in activeItem.raw_json.video_paths"
+                :key="idx"
+                :src="'https:' + video"
+                class="return-video"
+                controls
+              />
+            </div>
+          </div>
+
           <div v-if="activeItem.content_zh" class="translation-box">
             <div class="translation-title">中文翻译</div>
             <div>{{ activeItem.content_zh }}</div>
@@ -1871,6 +1900,52 @@ function getReturnSlaClass(item) {
   color: #c2410c;
   font-weight: 600;
   margin-bottom: 8px;
+}
+
+.return-attachments {
+  margin-bottom: 10px;
+}
+
+.return-attachments-title {
+  font-size: 11px;
+  color: #92400e;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.return-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.return-photo-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.return-photo-thumb:hover {
+  transform: scale(1.05);
+  border-color: #f97316;
+}
+
+.return-videos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.return-video {
+  max-width: 160px;
+  max-height: 100px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
 }
 
 .handler-box {
