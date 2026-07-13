@@ -1,6 +1,6 @@
 """初始化数据库表"""
 from app.database import Base, engine
-from app.models import models  # 导入整个模块
+from app.models import models as _models  # 导入整个模块（触发模型注册）
 
 # 创建所有表（仅创建不存在的表，不修改现有结构）
 Base.metadata.create_all(bind=engine)
