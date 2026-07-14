@@ -57,6 +57,9 @@ migrate_fix_customer_service_message_unique()  # 幂等，重复执行无影响
 from migrations.msg_dedup_migration import upgrade as msg_dedup_upgrade
 msg_dedup_upgrade()  # 幂等，重复执行无影响
 
+from migrations.add_question_answer_visibility import migrate_add_question_answer_visibility
+migrate_add_question_answer_visibility()  # 幂等，重复执行无影响
+
 # 导入路由
 from app.routers import auth, dashboard, products, shops, admin, users, inventory, orders, ads, customer_service
 from app.routers import metric_thresholds

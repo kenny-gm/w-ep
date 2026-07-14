@@ -10,18 +10,41 @@ from app.database import engine
 
 
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
-    rows = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
-    return any(row[1] == column_name for row in rows)
+    dialect = engine.dialect.name
+    if dialect == "sqlite":
+        rows = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
+        return any(row[1] == column_name for row in rows)
+    elif dialect == "mysql":
+        rows = conn.execute(
+            text(f"SHOW COLUMNS FROM {table_name} LIKE '{column_name}'")
+        ).fetchall()
+        return len(rows) > 0
+    else:
+        # fallback for other dialects
+        return False
 
 
 def _add_column(conn, table_name: str, column_name: str, ddl: str):
     if not _column_exists(conn, table_name, column_name):
-        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}"))
+        dialect = engine.dialect.name
+        if dialect == "sqlite":
+            conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}"))
+        elif dialect == "mysql":
+            conn.execute(
+                text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}")
+            )
+        else:
+            raise RuntimeError(f"Unsupported dialect: {dialect}")
 
 
 def migrate_add_question_answer_visibility():
     with engine.begin() as conn:
-        _add_column(conn, "customer_service_items", "answer_visibility", "VARCHAR(20) DEFAULT 'all'")
+        _add_column(
+            conn,
+            "customer_service_items",
+            "answer_visibility",
+            "VARCHAR(20) DEFAULT 'all'",
+        )
         return True
 
 
