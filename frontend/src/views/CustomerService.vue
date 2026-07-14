@@ -817,6 +817,7 @@ async function selectItem(item) {
 
   activeItem.value = res.data
   replyText.value = ''
+  replyVisibility.value = res.data.answer_visibility || 'all'
   noteText.value = res.data.internal_note || ''
   returnActions.value = []
   if (res.data.channel === 'return_claim') {

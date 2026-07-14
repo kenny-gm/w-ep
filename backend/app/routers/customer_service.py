@@ -1224,6 +1224,7 @@ def _serialize_item(
         "rating_display": _rating_stars(item.rating) if item.rating else None,
         "status": item.status,
         "reply_status": item.reply_status,
+        "answer_visibility": item.answer_visibility,
         "priority": item.priority,
         "risk_level": item.risk_level,
         "issue_type": item.issue_type,
