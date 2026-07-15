@@ -349,8 +349,9 @@ def test_migration_idempotent_adds_columns_and_backfills(mock_db):
     - 首次执行：添加 buyer_key + reply_sign 列 + 建索引（buyer_key 为历史兼容字段，非跨渠道聚合）
     - 再次执行：列/索引已存在则跳过
     """
-    from app.database import engine
     from sqlalchemy import text
+
+    engine = mock_db.get_bind()
 
     # 准备表结构（无 buyer_key/reply_sign 列）
     with engine.begin() as conn:
@@ -387,6 +388,7 @@ def test_migration_idempotent_adds_columns_and_backfills(mock_db):
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    mod.engine = engine
 
     # 第一次执行
     success1 = mod.migrate_add_buyer_key_and_reply_sign()
@@ -472,16 +474,18 @@ def test_sync_task_writes_failed_on_subtask_failure(mock_db, mock_shop_wb, mock_
         "errors": ["feedbacks: WB 限流"],
     }
     with patch("app.routers.customer_service.SessionLocal", return_value=mock_db):
-        with patch.object(type(svc), "_create_sync_log", lambda *a, **kw: sync_log):
-            with patch.object(type(svc), "_finish_sync_log", lambda *a, **kw: None):
-                with patch.object(CustomerServiceSyncService, "sync_all", return_value=fake_result):
-                    from app.routers.customer_service import _run_customer_service_sync_task
-                    _run_customer_service_sync_task(
-                        shop_id=mock_shop_wb.id,
-                        channel="all",
-                        days=7,
-                        log_id=log_id,
-                    )
+        with patch("app.routers.customer_service.SyncLockService.acquire", return_value=True):
+            with patch("app.routers.customer_service.SyncLockService.release", return_value=True):
+                with patch.object(type(svc), "_create_sync_log", lambda *a, **kw: sync_log):
+                    with patch.object(type(svc), "_finish_sync_log", lambda *a, **kw: None):
+                        with patch.object(CustomerServiceSyncService, "sync_all", return_value=fake_result):
+                            from app.routers.customer_service import _run_customer_service_sync_task
+                            _run_customer_service_sync_task(
+                                shop_id=mock_shop_wb.id,
+                                channel="all",
+                                days=7,
+                                log_id=log_id,
+                            )
 
     mock_db.expire_all()
     updated_log = mock_db.query(SyncLog).filter(SyncLog.id == log_id).first()
@@ -746,7 +750,9 @@ def test_related_items_returns_empty_list(mock_db, mock_shop_wb, mock_product):
 
     # Override 认证依赖，使用测试用户
     from app.routers.auth import get_current_user
+    from app.routers.customer_service import get_db
     app.dependency_overrides[get_current_user] = lambda: test_user
+    app.dependency_overrides[get_db] = lambda: mock_db
 
     client = TestClient(app, raise_server_exceptions=False)
     resp = client.get(f"/api/customer-service/items/{item.id}/related")
