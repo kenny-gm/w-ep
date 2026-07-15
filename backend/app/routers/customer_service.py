@@ -336,18 +336,8 @@ def list_customer_service_items(
         ))
 
     total = query.count()
-    risk_order = case(
-        (CustomerServiceItem.risk_level == "urgent", 0),
-        (CustomerServiceItem.risk_level == "high", 1),
-        (CustomerServiceItem.risk_level == "normal", 2),
-        else_=3,
-    )
     items = query.order_by(
-        risk_order,
-        CustomerServiceItem.sla_deadline_at.is_(None),
-        CustomerServiceItem.sla_deadline_at.asc(),
-        CustomerServiceItem.external_created_at.desc(),
-        CustomerServiceItem.id.desc(),
+        *_customer_service_sort_order(status=status, quick_key=quick_key)
     ).offset((page - 1) * page_size).limit(page_size).all()
     return {
         "items": [_serialize_item(item) for item in items],
@@ -355,6 +345,74 @@ def list_customer_service_items(
         "page": page,
         "page_size": page_size,
     }
+
+
+def _customer_service_sort_order(status: str, quick_key: Optional[str] = None) -> List[Any]:
+    risk_order = case(
+        (CustomerServiceItem.risk_level == "urgent", 0),
+        (CustomerServiceItem.risk_level == "high", 1),
+        (CustomerServiceItem.risk_level == "normal", 2),
+        else_=3,
+    )
+    recently_handled_keys = {
+        "feedback_low_bad_replied",
+        "feedback_high_bad_replied",
+        "question_answered",
+        "return_closed",
+        "chat_answered",
+        "chat_waiting_buyer",
+        "chat_finished",
+    }
+    if quick_key in recently_handled_keys or status in {"replied", "closed"}:
+        return [
+            CustomerServiceItem.last_handled_at.is_(None),
+            CustomerServiceItem.last_handled_at.desc(),
+            CustomerServiceItem.external_updated_at.is_(None),
+            CustomerServiceItem.external_updated_at.desc(),
+            risk_order,
+            CustomerServiceItem.id.desc(),
+        ]
+
+    workload_order = case(
+        (
+            and_(
+                CustomerServiceItem.status == "open",
+                CustomerServiceItem.reply_status == "unanswered",
+            ),
+            0,
+        ),
+        (CustomerServiceItem.status == "pending_internal", 1),
+        (
+            and_(
+                CustomerServiceItem.channel == "chat",
+                CustomerServiceItem.status == "replied",
+            ),
+            2,
+        ),
+        (
+            or_(
+                CustomerServiceItem.status == "replied",
+                CustomerServiceItem.reply_status == "answered",
+            ),
+            3,
+        ),
+        (CustomerServiceItem.status == "closed", 4),
+        (CustomerServiceItem.status == "archived", 5),
+        else_=6,
+    )
+    overdue_order = case((CustomerServiceItem.is_overdue == True, 0), else_=1)
+    return [
+        workload_order,
+        overdue_order,
+        risk_order,
+        CustomerServiceItem.sla_deadline_at.is_(None),
+        CustomerServiceItem.sla_deadline_at.asc(),
+        CustomerServiceItem.external_created_at.is_(None),
+        CustomerServiceItem.external_created_at.asc(),
+        CustomerServiceItem.external_updated_at.is_(None),
+        CustomerServiceItem.external_updated_at.desc(),
+        CustomerServiceItem.id.desc(),
+    ]
 
 
 @router.get("/items/{item_id}")
