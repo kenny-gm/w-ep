@@ -57,8 +57,8 @@ BATCHES: list[RawBatch] = [
     RawBatch("permission_probe", "buyer_chat", "/api/v1/seller/chats", "wb_raw_customer_chats", "low", "limit=1"),
     RawBatch("permission_probe", "returns", "/api/v1/claims", "wb_raw_customer_returns", "low", "limit=1"),
     RawBatch("content", "content", "/content/v2/get/cards/list", "wb_raw_content_cards", "medium", "full cursor pagination"),
-    RawBatch("content", "statistics", "/api/v1/supplier/stocks", "wb_raw_inventory_stocks", "medium", "product/barcode fallback"),
-    RawBatch("content", "marketplace", "/api/v3/warehouses", "wb_raw_inventory_stocks", "low", "warehouse dictionary"),
+    RawBatch("inventory", "statistics", "/api/v1/supplier/stocks", "wb_raw_inventory_stocks", "medium", "product/barcode fallback"),
+    RawBatch("inventory", "marketplace", "/api/v3/warehouses", "wb_raw_inventory_stocks", "low", "warehouse dictionary"),
     RawBatch("sales", "statistics", "/api/v1/supplier/orders", "wb_raw_statistics_orders", "medium", "official history window"),
     RawBatch("sales", "statistics", "/api/v1/supplier/sales", "wb_raw_statistics_sales", "medium", "sales/returns raw"),
     RawBatch("sales", "analytics", "/api/analytics/v3/sales-funnel/products/history", "wb_raw_analytics_product_funnel", "high", "low rate limit, nm/date windows"),
@@ -131,6 +131,26 @@ def permission_probe_request(batch: RawBatch) -> tuple[str, dict[str, Any] | Non
     if batch.source_api == "returns":
         return "GET", {"limit": 1, "offset": 0, "is_archive": "false"}, None
     return "GET", None, None
+
+
+def content_cards_request(
+    limit: int,
+    updated_at: str | None = None,
+    nm_id: int | None = None,
+) -> dict[str, Any]:
+    cursor: dict[str, Any] = {"limit": limit}
+    if updated_at:
+        cursor["updatedAt"] = updated_at
+    if nm_id:
+        cursor["nmID"] = nm_id
+
+    return {
+        "settings": {
+            "sort": {"ascending": False},
+            "filter": {"withPhoto": -1},
+            "cursor": cursor,
+        }
+    }
 
 
 def response_body(response: httpx.Response) -> Any:
@@ -222,6 +242,14 @@ def insert_raw_rows(mysql_conn, rows: list[dict[str, Any]], sync_batch_id: str) 
     mysql_conn.commit()
 
 
+def insert_raw_rows_replace_batch(mysql_conn, rows: list[dict[str, Any]], sync_batch_id: str, table: str) -> None:
+    with mysql_conn.cursor() as cur:
+        cur.execute(f"DELETE FROM {table} WHERE sync_batch_id = %s", (sync_batch_id,))
+    mysql_conn.commit()
+    if rows:
+        insert_raw_rows(mysql_conn, rows, sync_batch_id)
+
+
 def count_rows_for_batch(mysql_conn, sync_batch_id: str) -> dict[str, int]:
     tables = sorted({batch.target_table for batch in BATCHES if batch.phase == "permission_probe"})
     counts: dict[str, int] = {}
@@ -230,6 +258,12 @@ def count_rows_for_batch(mysql_conn, sync_batch_id: str) -> dict[str, int]:
             cur.execute(f"SELECT COUNT(*) AS count FROM {table} WHERE sync_batch_id = %s", (sync_batch_id,))
             counts[table] = int(cur.fetchone()["count"])
     return counts
+
+
+def count_table_for_batch(mysql_conn, table: str, sync_batch_id: str) -> int:
+    with mysql_conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) AS count FROM {table} WHERE sync_batch_id = %s", (sync_batch_id,))
+        return int(cur.fetchone()["count"])
 
 
 def run_permission_probe(args: argparse.Namespace, shops: list[dict[str, Any]], batches: list[RawBatch]) -> None:
@@ -261,17 +295,148 @@ def run_permission_probe(args: argparse.Namespace, shops: list[dict[str, Any]], 
         mysql_conn.close()
 
 
+def fetch_content_cards_page(
+    shop: dict[str, Any],
+    limit: int,
+    timeout: float,
+    updated_at: str | None = None,
+    nm_id: int | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    endpoint = "/content/v2/get/cards/list"
+    url = f"{API_DOMAINS['content']}{endpoint}"
+    request_json = content_cards_request(limit=limit, updated_at=updated_at, nm_id=nm_id)
+    headers = {"Authorization": shop["api_token"], "Content-Type": "application/json"}
+    fetched_at = datetime.now(timezone.utc)
+
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(url, headers=headers, params={"locale": "ru"}, json=request_json)
+
+    body = response_body(response)
+    if not (200 <= response.status_code < 300):
+        raise RuntimeError(
+            f"content cards failed: shop_id={shop['id']} status={response.status_code} body={json_dump(body)[:1000]}"
+        )
+    if not isinstance(body, dict):
+        raise RuntimeError(f"content cards invalid body: shop_id={shop['id']} type={type(body).__name__}")
+
+    cards = body.get("cards") or []
+    cursor = body.get("cursor") or {}
+    if not isinstance(cards, list):
+        raise RuntimeError(f"content cards invalid cards: shop_id={shop['id']} type={type(cards).__name__}")
+    if not isinstance(cursor, dict):
+        cursor = {}
+
+    page_meta = {
+        "method": "POST",
+        "url": url,
+        "status_code": response.status_code,
+        "request": {"params": {"locale": "ru"}, "json": request_json},
+        "cursor": cursor,
+        "cards_count": len(cards),
+        "fetched_at": fetched_at.isoformat(),
+    }
+    return page_meta, cards, cursor
+
+
+def run_content_cards(args: argparse.Namespace, shops: list[dict[str, Any]]) -> None:
+    if not args.mysql_user or not args.mysql_password:
+        raise SystemExit("MYSQL_USER and MYSQL_PASSWORD are required with --apply")
+
+    sync_batch_id = args.sync_batch_id or f"content_cards_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    limit = max(1, min(args.page_limit, 100))
+    target_table = "wb_raw_content_cards"
+    rows: list[dict[str, Any]] = []
+    total_pages = 0
+    print(f"Running WB content cards sync: batch={sync_batch_id} limit={limit} max_pages={args.max_pages}")
+
+    for shop in shops:
+        if not shop.get("api_token"):
+            print(f"  shop {shop['id']} {shop['name']}: skipped, missing token")
+            continue
+
+        updated_at: str | None = None
+        nm_id: int | None = None
+        seen_page_keys: set[tuple[str | None, int | None]] = set()
+
+        for page in range(1, args.max_pages + 1):
+            page_key = (updated_at, nm_id)
+            if page_key in seen_page_keys:
+                print(f"  shop {shop['id']} page {page}: stopped, repeated cursor")
+                break
+            seen_page_keys.add(page_key)
+
+            page_meta, cards, cursor = fetch_content_cards_page(
+                shop=shop,
+                limit=limit,
+                timeout=args.timeout,
+                updated_at=updated_at,
+                nm_id=nm_id,
+            )
+            total_pages += 1
+            print(
+                f"  shop {shop['id']} {shop['name']} page {page}: "
+                f"cards={len(cards)} cursor_total={cursor.get('total')}"
+            )
+
+            for card in cards:
+                card_nm_id = card.get("nmID") or card.get("nmId") or card.get("nm_id")
+                external_id = str(card_nm_id) if card_nm_id is not None else hashlib.sha256(
+                    json_dump(card).encode("utf-8")
+                ).hexdigest()
+                request_context = {
+                    **page_meta["request"],
+                    "page": page,
+                    "cursor_response": cursor,
+                }
+                rows.append(
+                    {
+                        "shop_id": shop["id"],
+                        "platform": "wildberries",
+                        "source_api": "content",
+                        "source_endpoint": "/content/v2/get/cards/list",
+                        "external_id": external_id,
+                        "request_params_json": request_context,
+                        "raw_json": {
+                            "card": card,
+                            "page": page,
+                            "page_meta": page_meta,
+                        },
+                        "target_table": target_table,
+                    }
+                )
+
+            if len(cards) < limit:
+                break
+            next_updated_at = cursor.get("updatedAt")
+            next_nm_id = cursor.get("nmID") or cursor.get("nmId")
+            if not next_updated_at or not next_nm_id:
+                break
+            updated_at = str(next_updated_at)
+            nm_id = int(next_nm_id)
+
+    mysql_conn = mysql_connect(args)
+    try:
+        insert_raw_rows_replace_batch(mysql_conn, rows, sync_batch_id, target_table)
+        count = count_table_for_batch(mysql_conn, target_table, sync_batch_id)
+        print("MySQL content card rows written:")
+        print(f"  {target_table}: {count}")
+        print(f"  pages_fetched: {total_pages}")
+    finally:
+        mysql_conn.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plan WB raw API sync batches")
     parser.add_argument("--sqlite-path", default="/app/db/wb_erp.db")
     parser.add_argument(
         "--phase",
-        choices=["permission_probe", "content", "sales", "ads", "customer", "finance", "all"],
+        choices=["permission_probe", "content", "inventory", "sales", "ads", "customer", "finance", "all"],
         default="permission_probe",
     )
     parser.add_argument("--shop-id", type=int)
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--max-pages", type=int, default=1)
+    parser.add_argument("--page-limit", type=int, default=100)
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument("--sync-batch-id", default="")
     parser.add_argument("--mysql-host", default=os.getenv("MYSQL_HOST", "wb-erp-mysql"))
@@ -299,9 +464,13 @@ def main() -> None:
         print(f"    - [{batch.risk}] {batch.source_api} {batch.endpoint} -> {batch.target_table} ({batch.note})")
 
     if args.apply:
-        if args.phase != "permission_probe":
-            raise SystemExit("--apply is currently allowed only for --phase permission_probe")
-        run_permission_probe(args, shops, batches)
+        if args.phase == "permission_probe":
+            run_permission_probe(args, shops, batches)
+            return
+        if args.phase == "content":
+            run_content_cards(args, shops)
+            return
+        raise SystemExit("--apply is currently allowed only for --phase permission_probe or --phase content")
         return
     print("dry-run only: no WB API calls, no MySQL writes")
 

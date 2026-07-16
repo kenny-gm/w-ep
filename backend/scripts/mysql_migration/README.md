@@ -21,6 +21,7 @@ python backend/scripts/mysql_migration/05_seed_v2_facts.py --dry-run
 python backend/scripts/mysql_migration/07_seed_v2_customer_sync_facts.py --dry-run
 python backend/scripts/mysql_migration/06_validate_migration.py --dry-run
 python backend/scripts/mysql_migration/08_sync_wb_raw_from_api.py --phase permission_probe
+python backend/scripts/mysql_migration/08_sync_wb_raw_from_api.py --phase content --max-pages 20
 ```
 
 Raw API layer plan:
@@ -29,6 +30,15 @@ Raw API layer plan:
 # Full WB API raw sync is intentionally separated from SQLite ETL.
 # Start from docs/wb-full-raw-api-sync-plan.md and run only the permission
 # probe batch before any full pull.
+
+# Batch 1 is limited to Content card raw data only. It reads
+# /content/v2/get/cards/list with cursor pagination and writes one raw row per
+# card into wb_raw_content_cards.
+python backend/scripts/mysql_migration/08_sync_wb_raw_from_api.py \
+  --phase content \
+  --max-pages 20 \
+  --page-limit 100 \
+  --apply
 ```
 
 影子库容器准备：
