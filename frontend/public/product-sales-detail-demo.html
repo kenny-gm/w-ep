@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>产品销售明细 Demo</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #e5e7eb;
+      --line-soft: #eef2f7;
+      --text: #0f172a;
+      --muted: #64748b;
+      --muted-2: #94a3b8;
+      --green: #059669;
+      --green-bg: #ecfdf5;
+      --red: #dc2626;
+      --red-bg: #fef2f2;
+      --amber: #b45309;
+      --amber-bg: #fffbeb;
+      --blue: #2563eb;
+      --blue-bg: #eff6ff;
+      --purple: #7c3aed;
+      --purple-bg: #f5f3ff;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    .page {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .title-block h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .title-block p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter {
+      height: 34px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      color: #334155;
+      padding: 0 10px;
+      font-size: 13px;
+    }
+
+    .summary-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .summary-item {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .summary-label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .summary-value {
+      margin-top: 5px;
+      font-size: 19px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .summary-note {
+      margin-top: 4px;
+      color: var(--muted-2);
+      font-size: 12px;
+    }
+
+    .table-shell {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      min-width: 1120px;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line-soft);
+      text-align: right;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .product-col {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      width: 270px;
+      min-width: 270px;
+      max-width: 270px;
+      text-align: left;
+      background: var(--panel);
+      box-shadow: 8px 0 14px rgba(15, 23, 42, 0.06);
+    }
+
+    th.product-col {
+      z-index: 4;
+      background: #f8fafc;
+    }
+
+    .product-main {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+
+    .toggle {
+      width: 22px;
+      height: 22px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #fff;
+      color: #334155;
+      line-height: 20px;
+      text-align: center;
+      cursor: pointer;
+      font-weight: 700;
+      padding: 0;
+    }
+
+    .name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .meta {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .owner {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 46px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--blue-bg);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .num {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+      font-weight: 650;
+    }
+
+    .muted { color: var(--muted); font-weight: 500; }
+    .pos { color: var(--green); }
+    .neg { color: var(--red); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .badge.ok { color: var(--green); background: var(--green-bg); }
+    .badge.warn { color: var(--amber); background: var(--amber-bg); }
+    .badge.danger { color: var(--red); background: var(--red-bg); }
+    .badge.info { color: var(--purple); background: var(--purple-bg); }
+
+    .detail-row { display: none; }
+    .detail-row.open { display: table-row; }
+    .detail-cell {
+      padding: 0;
+      background: #fbfdff;
+    }
+
+    .store-panel {
+      padding: 12px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .store-grid {
+      display: grid;
+      grid-template-columns: 180px repeat(7, minmax(110px, 1fr));
+      min-width: 980px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .store-cell {
+      padding: 10px 11px;
+      border-right: 1px solid var(--line-soft);
+      border-bottom: 1px solid var(--line-soft);
+      text-align: right;
+      min-height: 42px;
+    }
+
+    .store-cell:nth-child(8n) { border-right: none; }
+    .store-cell.header {
+      background: #f8fafc;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .store-cell.store-name {
+      text-align: left;
+      font-weight: 700;
+      color: #1e293b;
+      background: #fff;
+    }
+    .store-cell.last-row { border-bottom: none; }
+
+    .store-meta {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .signal-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .mobile-cards {
+      display: none;
+    }
+
+    @media (max-width: 780px) {
+      .page { padding: 12px; }
+      .toolbar { align-items: stretch; flex-direction: column; }
+      .filters { display: grid; grid-template-columns: 1fr 1fr; }
+      .filter { width: 100%; }
+      .summary-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary-value { font-size: 16px; }
+      table { min-width: 980px; }
+      .product-col {
+        width: 180px;
+        min-width: 180px;
+        max-width: 180px;
+      }
+      th, td { padding: 10px 9px; }
+      .store-panel { overflow-x: auto; }
+      .store-grid { min-width: 900px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="toolbar">
+      <div class="title-block">
+        <h1>产品销售明细</h1>
+        <p>2026-07-15 · 统一卢布主表 · 店铺原币种展开</p>
+      </div>
+      <div class="filters">
+        <button class="filter">昨日</button>
+        <button class="filter">全部负责人</button>
+        <button class="filter">全部产品</button>
+        <button class="filter">异常优先</button>
+      </div>
+    </div>
+
+    <section class="summary-strip">
+      <div class="summary-item">
+        <div class="summary-label">统一卢布销售额</div>
+        <div class="summary-value">1 250 430 ₽</div>
+        <div class="summary-note pos">+12.4%</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">广告费</div>
+        <div class="summary-value">55 056.41 ₽</div>
+        <div class="summary-note neg">+18.7%</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">订单数</div>
+        <div class="summary-value">1 238</div>
+        <div class="summary-note pos">+6.1%</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">异常产品</div>
+        <div class="summary-value">7</div>
+        <div class="summary-note">广告占比 / 转化率</div>
+      </div>
+    </section>
+
+    <section class="table-shell">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="product-col">产品</th>
+              <th>负责人</th>
+              <th>销售额</th>
+              <th>广告费</th>
+              <th>广告占比</th>
+              <th>订单</th>
+              <th>访客</th>
+              <th>加购率</th>
+              <th>转化率</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="product-col">
+                <div class="product-main">
+                  <button class="toggle" data-target="p1">-</button>
+                  <div>
+                    <div class="name">803 洗地机配件套装</div>
+                    <div class="meta">ID 18273645 · SKU CH-803-KIT</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="owner">Kenny</span></td>
+              <td class="num">428 920 ₽</td>
+              <td class="num">21 842.54 ₽</td>
+              <td class="num"><span class="badge warn">5.09%</span></td>
+              <td class="num">426</td>
+              <td class="num">18 904</td>
+              <td class="num">8.42%</td>
+              <td class="num">2.25%</td>
+              <td><span class="badge warn">广告上升</span></td>
+            </tr>
+            <tr id="p1" class="detail-row open">
+              <td class="detail-cell" colspan="10">
+                <div class="store-panel">
+                  <div class="store-grid">
+                    <div class="store-cell header store-name">店铺</div>
+                    <div class="store-cell header">销售额</div>
+                    <div class="store-cell header">广告费</div>
+                    <div class="store-cell header">广告占比</div>
+                    <div class="store-cell header">订单</div>
+                    <div class="store-cell header">访客</div>
+                    <div class="store-cell header">加购率</div>
+                    <div class="store-cell header">转化率</div>
+
+                    <div class="store-cell store-name">157WB<div class="store-meta">RUB</div></div>
+                    <div class="store-cell num">282 400 ₽</div>
+                    <div class="store-cell num">11 204.21 ₽</div>
+                    <div class="store-cell num">3.97%</div>
+                    <div class="store-cell num">281</div>
+                    <div class="store-cell num">11 804</div>
+                    <div class="store-cell num">8.61%</div>
+                    <div class="store-cell num">2.38%</div>
+
+                    <div class="store-cell store-name">炊恒WB<div class="store-meta">CNY</div></div>
+                    <div class="store-cell num">9 430 ¥</div>
+                    <div class="store-cell num">642.51 ¥</div>
+                    <div class="store-cell num"><span class="badge warn">6.81%</span></div>
+                    <div class="store-cell num">91</div>
+                    <div class="store-cell num">4 208</div>
+                    <div class="store-cell num">8.02%</div>
+                    <div class="store-cell num">2.16%</div>
+
+                    <div class="store-cell store-name last-row">邢拓WB<div class="store-meta">CNY</div></div>
+                    <div class="store-cell num last-row">3 889 ¥</div>
+                    <div class="store-cell num last-row">324.10 ¥</div>
+                    <div class="store-cell num last-row"><span class="badge danger">8.33%</span></div>
+                    <div class="store-cell num last-row">54</div>
+                    <div class="store-cell num last-row">2 892</div>
+                    <div class="store-cell num last-row">7.44%</div>
+                    <div class="store-cell num last-row">1.87%</div>
+                  </div>
+                  <div class="signal-row">
+                    <span class="badge warn">CNY 店铺广告占比偏高</span>
+                    <span class="badge info">主表统一卢布排序</span>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="product-col">
+                <div class="product-main">
+                  <button class="toggle" data-target="p2">+</button>
+                  <div>
+                    <div class="name">无线吸尘器 HEPA 滤芯</div>
+                    <div class="meta">ID 19380211 · SKU VX-HEPA-2</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="owner">Lena</span></td>
+              <td class="num">317 880 ₽</td>
+              <td class="num">9 821 ₽</td>
+              <td class="num">3.09%</td>
+              <td class="num">302</td>
+              <td class="num">15 229</td>
+              <td class="num">9.18%</td>
+              <td class="num">1.98%</td>
+              <td><span class="badge ok">正常</span></td>
+            </tr>
+            <tr id="p2" class="detail-row">
+              <td class="detail-cell" colspan="10">
+                <div class="store-panel">
+                  <div class="store-grid">
+                    <div class="store-cell header store-name">店铺</div>
+                    <div class="store-cell header">销售额</div>
+                    <div class="store-cell header">广告费</div>
+                    <div class="store-cell header">广告占比</div>
+                    <div class="store-cell header">订单</div>
+                    <div class="store-cell header">访客</div>
+                    <div class="store-cell header">加购率</div>
+                    <div class="store-cell header">转化率</div>
+                    <div class="store-cell store-name last-row">157WB<div class="store-meta">RUB</div></div>
+                    <div class="store-cell num last-row">317 880 ₽</div>
+                    <div class="store-cell num last-row">9 821 ₽</div>
+                    <div class="store-cell num last-row">3.09%</div>
+                    <div class="store-cell num last-row">302</div>
+                    <div class="store-cell num last-row">15 229</div>
+                    <div class="store-cell num last-row">9.18%</div>
+                    <div class="store-cell num last-row">1.98%</div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="product-col">
+                <div class="product-main">
+                  <button class="toggle" data-target="p3">+</button>
+                  <div>
+                    <div class="name">便携蒸汽拖把替换布</div>
+                    <div class="meta">ID 20488109 · SKU STM-PAD-6</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="owner">Max</span></td>
+              <td class="num">186 240 ₽</td>
+              <td class="num">13 392 ₽</td>
+              <td class="num"><span class="badge danger">7.19%</span></td>
+              <td class="num">141</td>
+              <td class="num">9 420</td>
+              <td class="num"><span class="neg">5.82%</span></td>
+              <td class="num">1.50%</td>
+              <td><span class="badge danger">需处理</span></td>
+            </tr>
+            <tr id="p3" class="detail-row">
+              <td class="detail-cell" colspan="10">
+                <div class="store-panel">
+                  <div class="store-grid">
+                    <div class="store-cell header store-name">店铺</div>
+                    <div class="store-cell header">销售额</div>
+                    <div class="store-cell header">广告费</div>
+                    <div class="store-cell header">广告占比</div>
+                    <div class="store-cell header">订单</div>
+                    <div class="store-cell header">访客</div>
+                    <div class="store-cell header">加购率</div>
+                    <div class="store-cell header">转化率</div>
+                    <div class="store-cell store-name">157WB<div class="store-meta">RUB</div></div>
+                    <div class="store-cell num">124 010 ₽</div>
+                    <div class="store-cell num">8 414 ₽</div>
+                    <div class="store-cell num"><span class="badge danger">6.78%</span></div>
+                    <div class="store-cell num">93</div>
+                    <div class="store-cell num">6 004</div>
+                    <div class="store-cell num">5.91%</div>
+                    <div class="store-cell num">1.55%</div>
+                    <div class="store-cell store-name last-row">炊恒WB<div class="store-meta">CNY</div></div>
+                    <div class="store-cell num last-row">5 657 ¥</div>
+                    <div class="store-cell num last-row">452.55 ¥</div>
+                    <div class="store-cell num last-row"><span class="badge danger">8.00%</span></div>
+                    <div class="store-cell num last-row">48</div>
+                    <div class="store-cell num last-row">3 416</div>
+                    <div class="store-cell num last-row">5.66%</div>
+                    <div class="store-cell num last-row">1.41%</div>
+                  </div>
+                  <div class="signal-row">
+                    <span class="badge danger">广告费高于阈值</span>
+                    <span class="badge warn">加购率低于均值</span>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    document.querySelectorAll('.toggle').forEach(function(button) {
+      button.addEventListener('click', function() {
+        var row = document.getElementById(button.dataset.target);
+        var open = row.classList.toggle('open');
+        button.textContent = open ? '-' : '+';
+      });
+    });
+  </script>
+</body>
+</html>
