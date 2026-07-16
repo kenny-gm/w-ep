@@ -63,8 +63,8 @@ def get_sales_currency(shop: "Shop") -> str:
 
 
 def get_ad_cost_currency(shop: "Shop") -> str:
-    """广告费币种:Yandex 用 CNY,WB 用 RUB"""
-    if shop.platform == "yandex":
+    """广告费币种:人民币店铺/Yandex 用 CNY,其他默认 RUB"""
+    if shop.platform == "yandex" or shop.currency == "CNY":
         return "CNY"
     return "RUB"
 
@@ -72,7 +72,7 @@ def get_ad_cost_currency(shop: "Shop") -> str:
 def convert_ad_cost(ad_record, shop_rates: dict) -> float:
     """
     统一广告费口径为 RUB。
-    - Yandex (platform==yandex): ad.cost 是 CNY,需要 × 汇率转 RUB
+    - CNY 店铺/Yandex: ad.cost 是 CNY,需要 × 汇率转 RUB
     - WB (platform==wildberries): ad.cost 是 RUB,不转换
     - 找不到 shop 时默认 RUB
     """
@@ -80,7 +80,7 @@ def convert_ad_cost(ad_record, shop_rates: dict) -> float:
     if not cost:
         return 0.0
     shop_cfg = shop_rates.get(ad_record.shop_id, {"platform": "", "currency": "RUB", "rate": 12.5})
-    if shop_cfg.get("platform") == "yandex":
+    if shop_cfg.get("platform") == "yandex" or shop_cfg.get("currency") == "CNY":
         rate = shop_cfg.get("rate", 12.5)
         return cost * rate
     return cost
@@ -116,7 +116,7 @@ def convert_ad_cost_value(cost: float, shop_id: int, shop_rates: dict) -> float:
     if not cost:
         return 0.0
     shop_cfg = shop_rates.get(shop_id, {"platform": "", "currency": "RUB", "rate": 12.5})
-    if shop_cfg.get("platform") == "yandex":
+    if shop_cfg.get("platform") == "yandex" or shop_cfg.get("currency") == "CNY":
         return cost * shop_cfg.get("rate", 12.5)
     return cost
 
