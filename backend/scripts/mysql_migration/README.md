@@ -21,6 +21,28 @@ python backend/scripts/mysql_migration/05_seed_v2_facts.py --dry-run
 python backend/scripts/mysql_migration/06_validate_migration.py --dry-run
 ```
 
+影子库容器准备：
+
+```bash
+docker compose up -d mysql
+docker exec wb-erp-mysql mysqladmin ping -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD"
+```
+
+影子库 schema dry-run：
+
+```bash
+python backend/scripts/mysql_migration/02_create_mysql_v2_schema.py --ddl docs/mysql-v2-schema.sql
+```
+
+真正创建影子库 schema 时再显式传入 `--apply` 和连接串：
+
+```bash
+python backend/scripts/mysql_migration/02_create_mysql_v2_schema.py \
+  --ddl docs/mysql-v2-schema.sql \
+  --mysql-url "mysql+pymysql://USER:PASSWORD@127.0.0.1:3306/wb_erp_shadow" \
+  --apply
+```
+
 真正写 MySQL 前必须单独确认，并提供：
 
 - SQLite 备份路径。
@@ -28,4 +50,3 @@ python backend/scripts/mysql_migration/06_validate_migration.py --dry-run
 - `SYNC_ENABLED=false` 是否需要执行。
 - 校验 SQL 清单。
 - 回滚方案。
-
