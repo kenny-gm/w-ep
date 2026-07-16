@@ -25,6 +25,7 @@ class DashboardFilter(BaseModel):
     owners: Optional[List[str]] = None
     product_ids: Optional[List[int]] = None
     product_name: Optional[str] = None
+    display_currency: str = "RUB"
 
 
 class DashboardStats(BaseModel):
@@ -109,7 +110,13 @@ def convert_currency(amount: float, to_currency: str, exchange_rate: float) -> f
 
 
 
-def convert_sales_value(amount: float, shop_id: int, shop_rates: dict) -> float:
+def use_native_amount(display_currency: str) -> bool:
+    return (display_currency or "RUB").upper() == "NATIVE"
+
+
+def convert_sales_value(amount: float, shop_id: int, shop_rates: dict, display_currency: str = "RUB") -> float:
+    if use_native_amount(display_currency):
+        return amount or 0
     shop_cfg = shop_rates.get(shop_id, {"currency": "RUB", "rate": 12.5})
     return convert_currency(amount or 0, shop_cfg.get("currency", "RUB"), shop_cfg.get("rate", 12.5))
 
@@ -135,10 +142,18 @@ def should_convert_ad_cost(shop_cfg: dict, record_date=None) -> bool:
     return record_day >= WB_CNY_AD_COST_CONVERT_FROM
 
 
-def convert_ad_cost_value(cost: float, shop_id: int, shop_rates: dict, record_date=None) -> float:
+def convert_ad_cost_value(
+    cost: float,
+    shop_id: int,
+    shop_rates: dict,
+    record_date=None,
+    display_currency: str = "RUB",
+) -> float:
     cost = cost or 0
     if not cost:
         return 0.0
+    if use_native_amount(display_currency):
+        return cost
     shop_cfg = shop_rates.get(shop_id, {"platform": "", "currency": "RUB", "rate": 12.5})
     if should_convert_ad_cost(shop_cfg, record_date):
         return cost * shop_cfg.get("rate", 12.5)
@@ -562,7 +577,9 @@ def get_dashboard_products(
         cost = row.cost or 0
         if not cost:
             continue
-        cost_rub = convert_ad_cost_value(cost, row.shop_id, shop_rates, row.record_day)
+        cost_rub = convert_ad_cost_value(
+            cost, row.shop_id, shop_rates, row.record_day, filter_data.display_currency
+        )
         if row.shop_id not in ad_costs_by_shop:
             ad_costs_by_shop[row.shop_id] = {}
         ad_costs_by_shop[row.shop_id][row.product_id] = (
@@ -610,7 +627,9 @@ def get_dashboard_products(
         cost = row.cost or 0
         if not cost:
             continue
-        cost_rub = convert_ad_cost_value(cost, row.shop_id, shop_rates, row.record_day)
+        cost_rub = convert_ad_cost_value(
+            cost, row.shop_id, shop_rates, row.record_day, filter_data.display_currency
+        )
         if row.shop_id not in prev_ad_costs_by_shop:
             prev_ad_costs_by_shop[row.shop_id] = {}
         prev_ad_costs_by_shop[row.shop_id][row.product_id] = (
@@ -639,9 +658,8 @@ def get_dashboard_products(
         pdata = product_stats.get(product.id, {"sales": 0, "visitors": 0, "cart": 0, "orders": 0})
         prev_data = prev_stats.get(product.id, {"sales": 0, "visitors": 0, "cart": 0, "orders": 0})
 
-        shop_config = shop_rates.get(product.shop_id, {"currency": "RUB", "rate": 12.5})
-        sales = convert_currency(pdata["sales"], shop_config["currency"], shop_config["rate"])
-        prev_sales = convert_currency(prev_data["sales"], shop_config["currency"], shop_config["rate"])
+        sales = convert_sales_value(pdata["sales"], product.shop_id, shop_rates, filter_data.display_currency)
+        prev_sales = convert_sales_value(prev_data["sales"], product.shop_id, shop_rates, filter_data.display_currency)
 
         # 计算产品级别的比率
         cart_rate = round(pdata["cart"] / pdata["visitors"] * 100, 2) if pdata["visitors"] > 0 else 0
@@ -671,7 +689,7 @@ def get_dashboard_products(
             "shop_name": shop_obj.name if shop_obj else "",
             "shop_platform": shop_platform,
             "shop_currency": shop_currency,
-            "display_currency": "RUB",
+            "display_currency": "NATIVE" if use_native_amount(filter_data.display_currency) else "RUB",
             "owner": product.owner or "",
             "sales": sales,
             "visitors": pdata["visitors"],
@@ -851,7 +869,9 @@ def get_sales_trend(
         date_str = str(row.date) if row.date else "unknown"
         if date_str not in daily_data:
             daily_data[date_str] = {"sales": 0.0, "visitors": 0, "cart": 0, "orders": 0, "ad_cost": 0.0}
-        daily_data[date_str]["sales"] += convert_sales_value(row.sales or 0, row.shop_id, shop_rates)
+        daily_data[date_str]["sales"] += convert_sales_value(
+            row.sales or 0, row.shop_id, shop_rates, filter_data.display_currency
+        )
         daily_data[date_str]["visitors"] += row.visitors or 0
         daily_data[date_str]["cart"] += row.cart or 0
         daily_data[date_str]["orders"] += row.orders or 0
@@ -860,7 +880,9 @@ def get_sales_trend(
         date_str = str(row.date) if row.date else "unknown"
         if date_str not in daily_data:
             daily_data[date_str] = {"sales": 0.0, "visitors": 0, "cart": 0, "orders": 0, "ad_cost": 0.0}
-        daily_data[date_str]["ad_cost"] += convert_ad_cost_value(row.cost or 0, row.shop_id, shop_rates, row.date)
+        daily_data[date_str]["ad_cost"] += convert_ad_cost_value(
+            row.cost or 0, row.shop_id, shop_rates, row.date, filter_data.display_currency
+        )
 
     return [{"date": d, **data} for d, data in sorted(daily_data.items())]
 

@@ -59,7 +59,7 @@
               {{ formatChange(section.summary[card.changeKey]) }}
             </div>
           </div>
-          <div class="metric-value">{{ formatMetricValue(section.summary, card) }}</div>
+          <div class="metric-value">{{ formatMetricValue(section, card) }}</div>
           <div class="chart-area" v-if="hasDateRange && section.trend[card.trendKey].length">
             <svg class="line-chart" viewBox="0 0 100 50" preserveAspectRatio="none">
               <path :d="getAreaPath(section.trend[card.trendKey], section.trend.max[card.trendKey])" :fill="card.color" fill-opacity="0.2" />
@@ -126,19 +126,19 @@ function createTrend() {
 }
 
 const metricSections = reactive([
-  { key: 'unified', title: '统一口径核心卡片', subtitle: '全部选中店铺统一折算为 RUB', currency: null, summary: createSummary(), trend: createTrend() },
-  { key: 'rub', title: 'RUB 店铺核心卡片', subtitle: '仅统计 RUB 店铺', currency: 'RUB', summary: createSummary(), trend: createTrend() },
-  { key: 'cny', title: 'CNY 店铺核心卡片', subtitle: '仅统计 CNY 店铺，金额统一折算为 RUB', currency: 'CNY', summary: createSummary(), trend: createTrend() },
+  { key: 'unified', title: '统一口径核心卡片', subtitle: '全部选中店铺统一折算为 RUB', currency: null, displayCurrency: 'RUB', amountUnit: '₽', summary: createSummary(), trend: createTrend() },
+  { key: 'rub', title: 'RUB 店铺核心卡片', subtitle: '仅统计 RUB 店铺', currency: 'RUB', displayCurrency: 'RUB', amountUnit: '₽', summary: createSummary(), trend: createTrend() },
+  { key: 'cny', title: 'CNY 店铺核心卡片', subtitle: '仅统计 CNY 店铺，金额显示原始 CNY', currency: 'CNY', displayCurrency: 'NATIVE', amountUnit: '¥', summary: createSummary(), trend: createTrend() },
 ])
 
 const metricCards = [
-  { key: 'sales', label: '销售额', icon: Money, valueKey: 'total_sales', changeKey: 'sales_change', trendKey: 'sales', unit: '₽', color: '#10b981' },
+  { key: 'sales', label: '销售额', icon: Money, valueKey: 'total_sales', changeKey: 'sales_change', trendKey: 'sales', unit: 'amount', color: '#10b981' },
   { key: 'visitors', label: '访客数', icon: User, valueKey: 'total_visitors', changeKey: 'visitors_change', trendKey: 'visitors', color: '#3b82f6' },
   { key: 'cart', label: '加购数', icon: ShoppingCart, valueKey: 'total_cart', changeKey: 'cart_change', trendKey: 'cart', color: '#8b5cf6' },
   { key: 'cart_rate', label: '加购率', icon: TrendCharts, valueKey: 'avg_cart_rate', changeKey: 'cart_rate_change', trendKey: 'cart_rate', unit: '%', color: '#a855f7', fixed: 2 },
   { key: 'orders', label: '订单数', icon: Document, valueKey: 'total_orders', changeKey: 'orders_change', trendKey: 'orders', color: '#f97316' },
   { key: 'conversion_rate', label: '转化率', icon: DataLine, valueKey: 'avg_conversion_rate', changeKey: 'avg_conversion_rate_change', trendKey: 'conversion_rate', unit: '%', color: '#06b6d4', fixed: 2 },
-  { key: 'ad_cost', label: '广告费', icon: Notification, valueKey: 'total_ad_cost', changeKey: 'ad_cost_change', trendKey: 'ad_cost', unit: '₽', color: '#ef4444', reverseChange: true },
+  { key: 'ad_cost', label: '广告费', icon: Notification, valueKey: 'total_ad_cost', changeKey: 'ad_cost_change', trendKey: 'ad_cost', unit: 'amount', color: '#ef4444', reverseChange: true },
   { key: 'ad_ratio', label: '广告占比', icon: PieChart, valueKey: 'avg_ad_ratio', changeKey: 'ad_ratio_change', trendKey: 'ad_ratio', unit: '%', color: '#ec489a', fixed: 2, reverseChange: true },
 ]
 
@@ -187,8 +187,8 @@ async function fetchData() {
   try {
     const selected = selectedShopIds()
     const sectionShopIds = getSectionShopIds(selected)
-    const productRequests = metricSections.map(section => fetchDashboardProducts(sectionShopIds[section.key]))
-    const trendRequests = metricSections.map(section => fetchDashboardTrend(sectionShopIds[section.key]))
+    const productRequests = metricSections.map(section => fetchDashboardProducts(sectionShopIds[section.key], section.displayCurrency))
+    const trendRequests = metricSections.map(section => fetchDashboardTrend(sectionShopIds[section.key], section.displayCurrency))
     const [productResponses, trendResponses] = await Promise.all([
       Promise.all(productRequests),
       Promise.all(trendRequests)
@@ -209,13 +209,14 @@ async function fetchData() {
   } catch (e) { ElMessage.error('获取数据失败') } finally { loading.value = false }
 }
 
-function buildProductRequest(shopIds) {
+function buildProductRequest(shopIds, displayCurrency = 'RUB') {
   return {
     start_date: filters.start_date,
     end_date: filters.end_date,
     shop_ids: shopIds,
     owners: filters.owner ? [filters.owner] : [],
-    product_name: filters.productId || undefined
+    product_name: filters.productId || undefined,
+    display_currency: displayCurrency
   }
 }
 
@@ -226,19 +227,20 @@ function getProductIdsForTrend() {
     .map(p => p.id)
 }
 
-async function fetchDashboardProducts(shopIds) {
+async function fetchDashboardProducts(shopIds, displayCurrency = 'RUB') {
   if (shopIds === null) return { items: [], summary: {}, comparison: {} }
-  const resp = await axios.post('/api/dashboard/products/', buildProductRequest(shopIds))
+  const resp = await axios.post('/api/dashboard/products/', buildProductRequest(shopIds, displayCurrency))
   return resp.data || { items: [], summary: {}, comparison: {} }
 }
 
-async function fetchDashboardTrend(shopIds) {
+async function fetchDashboardTrend(shopIds, displayCurrency = 'RUB') {
   if (shopIds === null) return []
   const resp = await axios.post('/api/dashboard/trend/', {
     start_date: filters.start_date,
     end_date: filters.end_date,
     shop_ids: shopIds,
-    product_ids: getProductIdsForTrend()
+    product_ids: getProductIdsForTrend(),
+    display_currency: displayCurrency
   })
   return resp.data || []
 }
@@ -351,10 +353,11 @@ function handleSizeChange() { pagination.page = 1; fetchData() }
 function handlePageChange() { fetchData() }
 function formatNumber(n) { if(!n) return '0'; return parseFloat(n.toString().replace(/,/g, '')).toLocaleString('ru-RU'); }
 function formatChange(c) { return c || c === 0 ? (c >= 0 ? '+' : '') + c.toFixed(1) + '%' : '0%' }
-function formatMetricValue(summary, card) {
-  const value = summary[card.valueKey] || 0
+function formatMetricValue(section, card) {
+  const value = section.summary[card.valueKey] || 0
   if (card.unit === '%') return Number(value).toFixed(card.fixed ?? 2) + '%'
-  return formatNumber(value) + (card.unit ? ' ' + card.unit : '')
+  const unit = card.unit === 'amount' ? section.amountUnit : card.unit
+  return formatNumber(value) + (unit ? ' ' + unit : '')
 }
 function getChangeClass(value, reverse = false) {
   const positive = (value || 0) >= 0
