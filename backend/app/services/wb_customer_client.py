@@ -135,11 +135,8 @@ class WBCustomerClient:
             params={"id": question_id},
         )
 
-    def answer_question(self, question_id: str, text: str, visibility_type: str = "all") -> Dict[str, Any]:
-        """
-        回复买家问答
-        visibility_type: "all" - 所有人可见, "questioner" - 仅提问者可见
-        """
+    def answer_question(self, question_id: str, text: str) -> Dict[str, Any]:
+        """回复买家问答"""
         return self._request(
             "PATCH",
             self.FEEDBACKS_API,
@@ -147,7 +144,7 @@ class WBCustomerClient:
             json_data={
                 "id": question_id,
                 "state": "wbRu",
-                "answer": {"text": text, "visibilityType": visibility_type},
+                "answer": {"text": text},
             },
         )
 
@@ -160,8 +157,8 @@ class WBCustomerClient:
             json_data={"id": question_id, "state": "none"},
         )
 
-    def edit_question_answer(self, question_id: str, text: str, visibility_type: str = "all") -> Dict[str, Any]:
-        """修改已回答的问题答案（同时可更新可见范围）"""
+    def edit_question_answer(self, question_id: str, text: str) -> Dict[str, Any]:
+        """修改已回答的问题答案"""
         return self._request(
             "PATCH",
             self.FEEDBACKS_API,
@@ -169,7 +166,7 @@ class WBCustomerClient:
             json_data={
                 "id": question_id,
                 "state": "wbRu",
-                "answer": {"text": text, "visibilityType": visibility_type},
+                "answer": {"text": text},
             },
         )
 

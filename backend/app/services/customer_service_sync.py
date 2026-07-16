@@ -348,10 +348,6 @@ class CustomerServiceSyncService:
         answer = rec.get("answer") or {}
         answer_text = answer.get("text") if isinstance(answer, dict) else answer
         answer_visibility = "all"
-        if isinstance(answer, dict):
-            vt = answer.get("visibilityType") or answer.get("visibility_type") or ""
-            if vt in ("questioner", "all"):
-                answer_visibility = vt
         question_status = rec.get("status") or rec.get("state") or ""
         is_answered = bool(rec.get("isAnswered") or answer_text)
         # 状态映射：已拒绝/已关闭 -> closed；已回答 -> replied；未处理 -> open

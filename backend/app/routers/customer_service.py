@@ -52,7 +52,6 @@ SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 class ReplyRequest(BaseModel):
     message: str
-    answer_visibility: Optional[str] = "all"  # 问答专属: "all" 所有人可见, "questioner" 仅提问者可见
 
 
 class AssignOwnerRequest(BaseModel):
@@ -711,7 +710,6 @@ def reply_customer_service_item(
 
     try:
         if item.channel == "question":
-            visibility = data.answer_visibility or "all"
             # ---- 先查 WB 最新状态 ----
             try:
                 remote_q = client.get_question(item.external_id)
@@ -753,11 +751,11 @@ def reply_customer_service_item(
                     )
                 else:
                     # 可编辑：走编辑接口
-                    response = client.edit_question_answer(item.external_id, message, visibility)
+                    response = client.edit_question_answer(item.external_id, message)
                     action_type = "edit_answer"
             else:
                 # 无回复：正常回答
-                response = client.answer_question(item.external_id, message, visibility)
+                response = client.answer_question(item.external_id, message)
                 action_type = "reply"
         elif item.channel == "feedback":
             if is_edit:
@@ -799,7 +797,7 @@ def reply_customer_service_item(
     item.reply_status = "answered"
     item.status = "replied"
     if item.channel == "question":
-        item.answer_visibility = data.answer_visibility or "all"
+        item.answer_visibility = "all"
     _touch_handled(item, current_user, now)
     db.add(CustomerServiceMessage(
         item_id=item.id,
