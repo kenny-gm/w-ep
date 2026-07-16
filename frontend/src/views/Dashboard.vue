@@ -455,6 +455,20 @@ onMounted(async () => {
   .filter-bar > .el-button { width: 100%; margin-top: 8px; }
   .matrix-row { grid-template-columns: 112px repeat(3, minmax(170px, 1fr)); min-width: 640px; }
   .matrix-metric-heading,
+  .matrix-metric-label {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    box-shadow: 8px 0 12px rgba(15, 23, 42, 0.06);
+  }
+  .matrix-metric-heading {
+    background: #f8fafc;
+    z-index: 4;
+  }
+  .matrix-metric-label {
+    background: #fbfdff;
+  }
+  .matrix-metric-heading,
   .matrix-metric-label { padding: 12px 10px; }
   .matrix-section-heading,
   .matrix-value-cell { padding: 10px; }
