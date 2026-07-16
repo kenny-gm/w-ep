@@ -11,10 +11,7 @@ export function formatRuble(amount, showSymbol = true) {
     return showSymbol ? '₽ 0' : '0'
   }
   
-  const formatted = amount.toLocaleString('zh-CN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  })
+  const formatted = formatNumber(amount)
   
   return showSymbol ? `₽ ${formatted}` : formatted
 }
@@ -41,7 +38,14 @@ export function formatNumber(num) {
   if (num === null || num === undefined || isNaN(num)) {
     return '0'
   }
-  return num.toLocaleString('zh-CN')
+  const value = Number.parseFloat(String(num).replace(/,/g, ''))
+  if (!Number.isFinite(value)) {
+    return '0'
+  }
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100
+  const [integerPart, decimalPart] = String(rounded).split('.')
+  const integer = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return decimalPart ? `${integer}.${decimalPart}` : integer
 }
 
 // 默认汇率（人民币转卢布）

@@ -124,7 +124,12 @@ function calcCpc(row) {
 
 function formatNumber(n) {
   if (!n && n !== 0) return '0'
-  return parseFloat(n.toString().replace(/,/g, '')).toLocaleString('ru-RU')
+  const value = Number.parseFloat(String(n).replace(/,/g, ''))
+  if (!Number.isFinite(value)) return '0'
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100
+  const [integerPart, decimalPart] = String(rounded).split('.')
+  const integer = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return decimalPart ? `${integer}.${decimalPart}` : integer
 }
 </script>
 

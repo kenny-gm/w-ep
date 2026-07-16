@@ -369,7 +369,15 @@ function openLogDialog(product) { selectedProduct.value = product; logDialogVisi
 async function fetchProductLogs(productId) { try { logList.value = (await axios.get('/api/operation-logs/', { params: { product_id: productId } })).data || [] } catch (e) { console.error(e); logList.value = [] } }
 function handleSizeChange() { pagination.page = 1; fetchData() }
 function handlePageChange() { fetchData() }
-function formatNumber(n) { if(!n) return '0'; return parseFloat(n.toString().replace(/,/g, '')).toLocaleString('ru-RU'); }
+function formatNumber(n) {
+  if (!n && n !== 0) return '0'
+  const value = Number.parseFloat(String(n).replace(/,/g, ''))
+  if (!Number.isFinite(value)) return '0'
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100
+  const [integerPart, decimalPart] = String(rounded).split('.')
+  const integer = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return decimalPart ? `${integer}.${decimalPart}` : integer
+}
 function formatChange(c) { return c || c === 0 ? (c >= 0 ? '+' : '') + c.toFixed(1) + '%' : '0%' }
 function formatMetricValue(section, card) {
   const value = section.summary[card.valueKey] || 0
