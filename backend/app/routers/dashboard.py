@@ -1,7 +1,7 @@
 """
 销售看板路由
 """
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -14,6 +14,8 @@ from app.models.metric_threshold import MetricThreshold
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["销售看板"])
+
+WB_CNY_AD_COST_CONVERT_FROM = date(2026, 7, 15)
 
 
 class DashboardFilter(BaseModel):
@@ -63,7 +65,7 @@ def get_sales_currency(shop: "Shop") -> str:
 
 
 def get_ad_cost_currency(shop: "Shop") -> str:
-    """广告费币种:人民币店铺/Yandex 用 CNY,其他默认 RUB"""
+    """广告费币种:WB 人民币店铺从 2026-07-15 起按 CNY,Yandex 一直按 CNY。"""
     if shop.platform == "yandex" or shop.currency == "CNY":
         return "CNY"
     return "RUB"
@@ -72,7 +74,8 @@ def get_ad_cost_currency(shop: "Shop") -> str:
 def convert_ad_cost(ad_record, shop_rates: dict) -> float:
     """
     统一广告费口径为 RUB。
-    - CNY 店铺/Yandex: ad.cost 是 CNY,需要 × 汇率转 RUB
+    - WB 人民币店铺: 2026-07-15 前 ad.cost 已是 RUB,从 2026-07-15 起按 CNY × 汇率转 RUB
+    - Yandex: ad.cost 是 CNY,需要 × 汇率转 RUB
     - WB (platform==wildberries): ad.cost 是 RUB,不转换
     - 找不到 shop 时默认 RUB
     """
@@ -80,7 +83,7 @@ def convert_ad_cost(ad_record, shop_rates: dict) -> float:
     if not cost:
         return 0.0
     shop_cfg = shop_rates.get(ad_record.shop_id, {"platform": "", "currency": "RUB", "rate": 12.5})
-    if shop_cfg.get("platform") == "yandex" or shop_cfg.get("currency") == "CNY":
+    if should_convert_ad_cost(shop_cfg, getattr(ad_record, "record_date", None)):
         rate = shop_cfg.get("rate", 12.5)
         return cost * rate
     return cost
@@ -111,12 +114,33 @@ def convert_sales_value(amount: float, shop_id: int, shop_rates: dict) -> float:
     return convert_currency(amount or 0, shop_cfg.get("currency", "RUB"), shop_cfg.get("rate", 12.5))
 
 
-def convert_ad_cost_value(cost: float, shop_id: int, shop_rates: dict) -> float:
+def should_convert_ad_cost(shop_cfg: dict, record_date=None) -> bool:
+    if shop_cfg.get("platform") == "yandex":
+        return True
+    if shop_cfg.get("currency") != "CNY":
+        return False
+    if not record_date:
+        return False
+
+    try:
+        if isinstance(record_date, datetime):
+            record_day = record_date.date()
+        elif isinstance(record_date, date):
+            record_day = record_date
+        else:
+            record_day = datetime.strptime(str(record_date)[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return False
+
+    return record_day >= WB_CNY_AD_COST_CONVERT_FROM
+
+
+def convert_ad_cost_value(cost: float, shop_id: int, shop_rates: dict, record_date=None) -> float:
     cost = cost or 0
     if not cost:
         return 0.0
     shop_cfg = shop_rates.get(shop_id, {"platform": "", "currency": "RUB", "rate": 12.5})
-    if shop_cfg.get("platform") == "yandex" or shop_cfg.get("currency") == "CNY":
+    if should_convert_ad_cost(shop_cfg, record_date):
         return cost * shop_cfg.get("rate", 12.5)
     return cost
 
@@ -517,8 +541,11 @@ def get_dashboard_products(
             "orders": row.orders or 0,
         }
 
-    # 当前周期广告费用（SQL GROUP BY shop_id+product_id，转换在 Python）
+    ad_cost_date_expr = func.date(AdRecord.record_date)
+
+    # 当前周期广告费用（SQL GROUP BY shop_id+product_id+date，转换在 Python）
     current_ad_cost_rows = db.query(
+        ad_cost_date_expr.label("record_day"),
         AdRecord.shop_id.label("shop_id"),
         AdRecord.product_id.label("product_id"),
         func.sum(AdRecord.cost).label("cost"),
@@ -527,7 +554,7 @@ def get_dashboard_products(
         AdRecord.record_date < end_date,
         AdRecord.ad_type == "advertising",
         AdRecord.product_id.in_(product_ids),
-    ).group_by(AdRecord.shop_id, AdRecord.product_id).all()
+    ).group_by(ad_cost_date_expr, AdRecord.shop_id, AdRecord.product_id).all()
 
     # {shop_id: {product_id: cost_rub}}
     ad_costs_by_shop: Dict[int, Dict[int, float]] = {}
@@ -535,12 +562,7 @@ def get_dashboard_products(
         cost = row.cost or 0
         if not cost:
             continue
-        shop_cfg = shop_rates.get(row.shop_id, {"platform": "", "currency": "RUB", "rate": 12.5})
-        cost_rub = (
-            cost * shop_cfg["rate"]
-            if shop_cfg.get("platform") == "yandex" or shop_cfg.get("currency") == "CNY"
-            else cost
-        )
+        cost_rub = convert_ad_cost_value(cost, row.shop_id, shop_rates, row.record_day)
         if row.shop_id not in ad_costs_by_shop:
             ad_costs_by_shop[row.shop_id] = {}
         ad_costs_by_shop[row.shop_id][row.product_id] = (
@@ -570,8 +592,9 @@ def get_dashboard_products(
             "orders": row.orders or 0,
         }
 
-    # 上一周期广告费用（SQL GROUP BY）
+    # 上一周期广告费用（SQL GROUP BY shop_id+product_id+date，转换在 Python）
     prev_ad_cost_rows = db.query(
+        ad_cost_date_expr.label("record_day"),
         AdRecord.shop_id.label("shop_id"),
         AdRecord.product_id.label("product_id"),
         func.sum(AdRecord.cost).label("cost"),
@@ -580,19 +603,14 @@ def get_dashboard_products(
         AdRecord.record_date < prev_end,
         AdRecord.ad_type == "advertising",
         AdRecord.product_id.in_(product_ids),
-    ).group_by(AdRecord.shop_id, AdRecord.product_id).all()
+    ).group_by(ad_cost_date_expr, AdRecord.shop_id, AdRecord.product_id).all()
 
     prev_ad_costs_by_shop: Dict[int, Dict[int, float]] = {}
     for row in prev_ad_cost_rows:
         cost = row.cost or 0
         if not cost:
             continue
-        shop_cfg = shop_rates.get(row.shop_id, {"platform": "", "currency": "RUB", "rate": 12.5})
-        cost_rub = (
-            cost * shop_cfg["rate"]
-            if shop_cfg.get("platform") == "yandex" or shop_cfg.get("currency") == "CNY"
-            else cost
-        )
+        cost_rub = convert_ad_cost_value(cost, row.shop_id, shop_rates, row.record_day)
         if row.shop_id not in prev_ad_costs_by_shop:
             prev_ad_costs_by_shop[row.shop_id] = {}
         prev_ad_costs_by_shop[row.shop_id][row.product_id] = (
@@ -842,7 +860,7 @@ def get_sales_trend(
         date_str = str(row.date) if row.date else "unknown"
         if date_str not in daily_data:
             daily_data[date_str] = {"sales": 0.0, "visitors": 0, "cart": 0, "orders": 0, "ad_cost": 0.0}
-        daily_data[date_str]["ad_cost"] += convert_ad_cost_value(row.cost or 0, row.shop_id, shop_rates)
+        daily_data[date_str]["ad_cost"] += convert_ad_cost_value(row.cost or 0, row.shop_id, shop_rates, row.date)
 
     return [{"date": d, **data} for d, data in sorted(daily_data.items())]
 
