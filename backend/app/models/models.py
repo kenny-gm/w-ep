@@ -296,7 +296,7 @@ class UISetting(Base):
     login_subtitle = Column(String(200), default="Wildberries 跨境电商管理系统")
     sidebar_logo = Column(String(200), default="🍀 WB ERP")
     primary_color = Column(String(20), default="#8b5cf6")
-    browser_logo = Column(String(500), default="")
+    browser_logo = Column(Text, default="")
     footer_text = Column(String(200), default="")
     updated_at = Column(DateTime, default=lambda: datetime.now(ZoneInfo("Asia/Shanghai")), onupdate=lambda ctx: datetime.now(ZoneInfo("Asia/Shanghai")))
 
