@@ -24,6 +24,33 @@ python backend/scripts/mysql_migration/08_sync_wb_raw_from_api.py --phase permis
 python backend/scripts/mysql_migration/08_sync_wb_raw_from_api.py --phase content --max-pages 20
 ```
 
+Legacy operational table backfill:
+
+```bash
+# This script fills the old business tables that current backend routers still
+# read after cutover, such as users/shops/products/orders/ad_records/
+# customer_service_* / system_settings / ai_prompt_templates / ui_settings.
+#
+# It is dry-run by default, never truncates or deletes target data, and skips
+# non-empty MySQL tables unless --allow-non-empty is explicitly passed.
+# Writes use INSERT IGNORE to preserve existing primary/unique keys and
+# password hashes.
+python backend/scripts/mysql_migration/03_migrate_legacy_tables.py \
+  --sqlite-path /app/db/wb_erp.db
+
+# For a fresh empty MySQL schema after a confirmed backup/cutover window:
+python backend/scripts/mysql_migration/03_migrate_legacy_tables.py \
+  --sqlite-path /app/db/wb_erp.db \
+  --apply
+
+# For an emergency retry into partially populated tables, use only after
+# reviewing the dry-run output. This still does not overwrite existing rows.
+python backend/scripts/mysql_migration/03_migrate_legacy_tables.py \
+  --sqlite-path /app/db/wb_erp.db \
+  --allow-non-empty \
+  --apply
+```
+
 Raw API layer plan:
 
 ```bash
