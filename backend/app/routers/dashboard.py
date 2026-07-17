@@ -305,6 +305,11 @@ def get_dashboard_stats(
             AdRecord.record_date < end_date,
             AdRecord.ad_type == "product_analytics",
         )
+        ads_cost_query = db.query(AdRecord).filter(
+            AdRecord.record_date >= start_date,
+            AdRecord.record_date < end_date,
+            AdRecord.ad_type == "advertising",
+        )
         if has_shop_filter:
             ads_query = ads_query.filter(AdRecord.shop_id.in_(filter_data.shop_ids))
 
@@ -318,10 +323,6 @@ def get_dashboard_stats(
             if _restricted_product_ids:
                 ads_query = ads_query.filter(AdRecord.product_id.in_(_restricted_product_ids))
                 ads_cost_query = ads_cost_query.filter(AdRecord.product_id.in_(_restricted_product_ids))
-                orders_query = db.query(Order).filter(
-                    Order.order_date >= start_date,
-                    Order.order_date < end_date
-                ).join(OrderItem, Order.id == OrderItem.order_id).filter(OrderItem.product_id.in_(_restricted_product_ids))
             else:
                 # 有限制但无产品，返回空
                 return stats
@@ -331,19 +332,10 @@ def get_dashboard_stats(
 
         ads = ads_query.all()
         ads_costs = ads_cost_query.all()
-        orders = orders_query.all()
-
-        # 从orders表获取销售额(只按店铺筛选)
-        if has_shop_filter:
-            orders_query = orders_query.filter(Order.shop_id.in_(filter_data.shop_ids))
-        orders = orders_query.all()
-
-        for order in orders:
-            order_shop_config = shop_rates.get(order.shop_id, {"currency": "RUB", "rate": 12.5})
-            sales_val = convert_currency(order.total_amount, order_shop_config["currency"], order_shop_config["rate"])
-            stats.sales_amount += sales_val
 
         for ad in ads:
+            ad_shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5})
+            stats.sales_amount += convert_currency(ad.sales or 0, ad_shop_cfg["currency"], ad_shop_cfg["rate"])
             stats.visitors += ad.visitors or 0
             stats.add_to_cart += ad.cart_count or 0
             stats.order_count += ad.order_count or 0
@@ -422,8 +414,6 @@ def get_dashboard_stats(
 
         prev_ads = prev_ads_query.all()
         prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0}
-
-        # prev_orders 在无负责人筛选分支中未定义,跳过订单汇总(Order 数据已由上方循环处理)
 
         for ad in prev_ads:
             ad_shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5})
