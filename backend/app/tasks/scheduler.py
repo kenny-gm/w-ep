@@ -6,6 +6,11 @@ scheduler = BackgroundScheduler()
 
 def start_scheduler():
     try:
+        from app.config import settings
+        if not getattr(settings, "SYNC_ENABLED", True):
+            print("SYNC_ENABLED=false，定时任务调度器不启动")
+            return False
+
         from app.tasks.effect_tracking import track_operation_effects
         
         # Daily at 6:10 AM Beijing time - track operation effects
@@ -17,8 +22,10 @@ def start_scheduler():
         
         scheduler.start()
         print("定时任务调度器已启动")
+        return True
     except Exception as e:
         print(f"启动定时任务失败: {e}")
+        return False
 
 
 def sync_yandex_traffic_task():

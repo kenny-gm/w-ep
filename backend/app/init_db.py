@@ -18,19 +18,22 @@ print(f"创建的表: {tables}")
 # ============================================================
 def migrate_add_platform_config(db_url: str = None):
     """检测并添加 platform_config 列（如果不存在）
-    支持 SQLite 和 PostgreSQL 双引擎"""
+    支持 SQLite、PostgreSQL 和 MySQL"""
     if db_url is None:
         db_url = str(engine.url)
 
     from sqlalchemy import text
     with engine.connect() as conn:
-        is_postgres = "postgres" in db_url.lower()
+        url_lower = db_url.lower()
+        is_postgres = "postgres" in url_lower
+        is_mysql = "mysql" in url_lower
 
-        if is_postgres:
+        if is_postgres or is_mysql:
             try:
                 result = conn.execute(text(
                     "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_name = 'shops' AND column_name = 'platform_config'"
+                    "WHERE table_name = 'shops' AND column_name = 'platform_config' "
+                    "AND table_schema = DATABASE()"
                 ))
                 columns = [row[0] for row in result.fetchall()]
             except Exception as e:
@@ -51,6 +54,10 @@ def migrate_add_platform_config(db_url: str = None):
                 if is_postgres:
                     conn.execute(text(
                         "ALTER TABLE shops ADD COLUMN platform_config JSON DEFAULT '{}'"
+                    ))
+                elif is_mysql:
+                    conn.execute(text(
+                        "ALTER TABLE shops ADD COLUMN platform_config JSON"
                     ))
                 else:
                     conn.execute(text(
