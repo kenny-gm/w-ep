@@ -140,6 +140,9 @@ def update_sync_schedule(
         schedule.interval_minutes = data.interval_minutes
     if data.next_run_at is not None:
         schedule.next_run_at = data.next_run_at.replace(tzinfo=None)
+    elif data.interval_minutes is not None or data.enabled is True:
+        now = datetime.now(ZoneInfo("Asia/Shanghai")).replace(tzinfo=None)
+        schedule.next_run_at = now + timedelta(minutes=schedule.interval_minutes)
 
     schedule.updated_at = datetime.now(ZoneInfo("Asia/Shanghai")).replace(tzinfo=None)
     db.commit()
