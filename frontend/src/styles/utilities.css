@@ -88,7 +88,9 @@
 .stat-value {
   font-size: var(--font-size-2xl);
   font-weight: 600;
-  font-family: var(--font-mono);
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
   color: var(--text-primary);
 }
 

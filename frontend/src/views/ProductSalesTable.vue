@@ -654,7 +654,12 @@ async function prefetchLogsForDateRange() {
 .col-sku { width: 100px; }
 .col-log { width: 50px; text-align: center; }
 
-.tree-table td.num { text-align: right; }
+.tree-table td.num {
+  text-align: right;
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
 
 .log-icon {
   cursor: pointer;

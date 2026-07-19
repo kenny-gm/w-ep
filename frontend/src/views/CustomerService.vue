@@ -1323,7 +1323,9 @@ function getReturnSlaClass(item) {
 }
 
 .channel-item-num {
-  font-family: var(--font-mono);
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
   font-size: 18px;
   font-weight: 800;
   color: var(--text-strong);

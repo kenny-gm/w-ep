@@ -1398,7 +1398,9 @@ watch(selectedShop, (newShopId) => {
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  font-family: var(--font-mono);
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
   font-size: 17px;
   font-weight: 800;
   color: var(--text-strong);
@@ -1416,7 +1418,9 @@ watch(selectedShop, (newShopId) => {
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  font-family: var(--font-mono);
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
   font-size: 12px;
   font-weight: 800;
   padding: 2px 7px;
@@ -1460,7 +1464,9 @@ watch(selectedShop, (newShopId) => {
 }
 
 .pie-total-pct {
-  font-family: var(--font-mono);
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
   font-size: 14px;
   font-weight: 800;
   color: var(--text-strong);
@@ -1478,7 +1484,9 @@ watch(selectedShop, (newShopId) => {
 .dl-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .dl-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .dl-val {
-  font-family: var(--font-mono);
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
   font-size: 12px;
   font-weight: 700;
   color: var(--text-strong);

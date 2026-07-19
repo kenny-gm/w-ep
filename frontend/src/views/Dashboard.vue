@@ -562,7 +562,9 @@ onMounted(async () => {
 }
 
 .matrix-value {
-  font-family: var(--font-mono);
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
   font-size: 17px;
   font-weight: 800;
   color: var(--text-strong);
@@ -574,7 +576,9 @@ onMounted(async () => {
 
 .matrix-change {
   flex: 0 0 auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
   font-size: 12px;
   font-weight: 800;
   padding: 2px 7px;
