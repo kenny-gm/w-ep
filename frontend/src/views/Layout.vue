@@ -12,9 +12,9 @@
       <el-menu
         :default-active="activeMenu"
         :collapse="isCollapsed && !isMobile"
-        background-color="#7B2D8E"
-        text-color="#ffffff"
-        :active-text-color="'#ffffff'"
+        background-color="transparent"
+        text-color="#374151"
+        :active-text-color="'#6d28d9'"
         :collapse-transition="false"
         @select="handleMenuSelect"
         @contextmenu.native.prevent="handleContextMenu"
@@ -499,6 +499,117 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 @media (min-width: 1024px) {
   .header {
     padding: 0 24px;
+  }
+}
+
+/* First-pass operations workspace shell */
+.layout-container {
+  height: 100vh;
+  background: var(--surface-page);
+}
+
+.sidebar {
+  width: 184px !important;
+  min-width: 184px !important;
+  background: var(--surface-panel) !important;
+  border-right: 1px solid var(--border-subtle);
+  box-shadow: none;
+}
+
+.logo {
+  height: 54px;
+  justify-content: flex-start;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.logo-text {
+  color: var(--color-brand);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.sidebar :deep(.el-menu) {
+  padding: 8px 10px;
+  background: transparent !important;
+}
+
+.sidebar :deep(.el-menu-item),
+.sidebar :deep(.el-sub-menu__title) {
+  height: 36px;
+  line-height: 36px;
+  margin: 3px 0;
+  border-radius: var(--radius-lg);
+  color: var(--text-main) !important;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.sidebar :deep(.el-menu-item .el-icon),
+.sidebar :deep(.el-sub-menu__title .el-icon) {
+  color: var(--text-muted);
+}
+
+.sidebar :deep(.el-menu-item:hover),
+.sidebar :deep(.el-sub-menu__title:hover) {
+  background: var(--surface-muted) !important;
+  color: var(--text-strong) !important;
+}
+
+.sidebar :deep(.el-menu-item.is-active),
+.sidebar :deep(.el-sub-menu__title.is-active) {
+  background: var(--color-brand-soft) !important;
+  color: var(--color-brand) !important;
+  font-weight: 750;
+}
+
+.sidebar :deep(.el-menu-item.is-active .el-icon),
+.sidebar :deep(.el-sub-menu__title.is-active .el-icon) {
+  color: var(--color-brand) !important;
+}
+
+.header {
+  height: 54px;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-subtle);
+  box-shadow: none;
+}
+
+.page-title {
+  color: var(--text-strong);
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.main-content {
+  background: var(--surface-page);
+  padding: 16px;
+}
+
+.user-info {
+  min-height: 34px;
+  color: var(--text-main);
+}
+
+.user-info:hover,
+.menu-toggle:hover,
+.alert-icon:hover {
+  background: var(--surface-muted);
+}
+
+@media (max-width: 767px) {
+  .main-content {
+    padding: 10px;
+  }
+
+  .header {
+    height: 52px;
+  }
+
+  .page-title {
+    font-size: 15px;
   }
 }
 </style>

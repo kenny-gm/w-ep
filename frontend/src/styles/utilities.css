@@ -33,23 +33,23 @@
 }
 
 .status-badge.success {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--color-success-soft);
+  color: var(--color-success);
 }
 
 .status-badge.warning {
-  background: #fed7aa;
-  color: #92400e;
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
 }
 
 .status-badge.danger {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .status-badge.info {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--color-info-soft);
+  color: var(--color-info);
 }
 
 /* ========== ERP 通用组件 ========== */

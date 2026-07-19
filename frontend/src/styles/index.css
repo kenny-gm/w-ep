@@ -42,6 +42,36 @@ body {
   min-height: 100vh;
 }
 
+.page-surface,
+.dashboard,
+.ad-analysis,
+.logs-container {
+  background: var(--surface-page);
+}
+
+.filter-bar,
+.filter-section,
+.filter-card,
+.data-info-bar {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-sm);
+}
+
+.filter-bar,
+.filter-section {
+  gap: 8px 10px;
+}
+
+.card-header,
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 /* 链接默认样式 */
 a {
   color: var(--primary-color);
@@ -73,15 +103,15 @@ a:hover {
 
 /* 表格行状态样式（配合JS使用） */
 .warning-row {
-  background: #fffbeb !important;
+  background: var(--color-warning-soft) !important;
 }
 
 .danger-row {
-  background: #fef2f2 !important;
+  background: var(--color-danger-soft) !important;
 }
 
 .success-row {
-  background: #f0fdf4 !important;
+  background: var(--color-success-soft) !important;
 }
 
 /* 选中文本颜色 */

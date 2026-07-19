@@ -5,7 +5,6 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
 import './styles/index.css'
-import './styles/glassmorphism.css'
 import axios from 'axios'
 
 const app = createApp(App)

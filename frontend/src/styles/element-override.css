@@ -3,41 +3,35 @@
    ======================================== */
 
 :root {
-  /* 主色覆盖为紫色 */
-  --el-color-primary: #8b5cf6;
+  --el-color-primary: var(--color-brand);
   --el-color-primary-light-3: #a78bfa;
-  --el-color-primary-light-5: #ddd6fe;
-  --el-color-primary-light-7: #e9e5ff;
-  --el-color-primary-light-8: #f5f3ff;
-  --el-color-primary-light-9: #faf9ff;
-  --el-color-primary-dark-2: #7c3aed;
+  --el-color-primary-light-5: var(--color-brand-border);
+  --el-color-primary-light-7: #ebe4ff;
+  --el-color-primary-light-8: var(--color-brand-soft);
+  --el-color-primary-light-9: #fbfaff;
+  --el-color-primary-dark-2: var(--color-brand-hover);
   
-  /* 状态色 */
-  --el-color-success: #10b981;
-  --el-color-warning: #f59e0b;
-  --el-color-danger: #ef4444;
-  --el-color-info: #6b7280;
+  --el-color-success: var(--color-success);
+  --el-color-warning: var(--color-warning);
+  --el-color-danger: var(--color-danger);
+  --el-color-info: var(--color-info);
   
-  /* 文字颜色 */
-  --el-text-color-primary: #1f2937;
-  --el-text-color-regular: #374151;
-  --el-text-color-secondary: #6b7280;
-  --el-text-color-placeholder: #9ca3af;
+  --el-text-color-primary: var(--text-strong);
+  --el-text-color-regular: var(--text-main);
+  --el-text-color-secondary: var(--text-subtle);
+  --el-text-color-placeholder: var(--text-muted);
   
-  /* 背景颜色 */
-  --el-bg-color: #ffffff;
-  --el-bg-color-page: #f3f4f6;
-  --el-bg-color-overlay: #ffffff;
+  --el-bg-color: var(--surface-panel);
+  --el-bg-color-page: var(--surface-page);
+  --el-bg-color-overlay: var(--surface-panel);
   
-  /* 边框 */
-  --el-border-color: #e5e7eb;
-  --el-border-color-light: #f3f4f6;
-  --el-border-radius-base: 8px;
+  --el-border-color: var(--border-subtle);
+  --el-border-color-light: var(--border-subtle);
+  --el-border-radius-base: var(--radius-lg);
   --el-border-radius-small: 4px;
   
-  /* 字体 */
   --el-font-size-base: 14px;
-  --el-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --el-font-family: var(--font-sans);
 }
 
 /* ========================================
@@ -83,14 +77,23 @@
    ======================================== */
 
 .el-table {
-  --el-table-header-bg-color: #f9fafb;
-  --el-table-row-hover-bg-color: #f3f4f6;
-  font-size: 14px;
+  --el-table-header-bg-color: var(--surface-muted);
+  --el-table-row-hover-bg-color: var(--surface-hover);
+  --el-table-border-color: var(--border-subtle);
+  font-size: 13px;
 }
 
 .el-table th.el-table__cell {
-  font-weight: 500;
-  color: #374151;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.el-table .cell {
+  line-height: 1.35;
+}
+
+.el-table td.el-table__cell {
+  color: var(--text-main);
 }
 
 /* ========================================
@@ -98,8 +101,12 @@
    ======================================== */
 
 .el-button {
-  border-radius: 8px;
-  font-weight: 500;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+}
+
+.el-button--small {
+  min-height: 28px;
 }
 
 .el-button--large {
@@ -111,9 +118,19 @@
    ======================================== */
 
 .el-card {
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.el-card__header {
+  padding: 12px 14px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.el-card__body {
+  padding: 14px;
 }
 
 /* ========================================
@@ -122,12 +139,18 @@
 
 .el-form-item__label {
   font-size: 14px;
-  color: #374151;
-  font-weight: 500;
+  color: var(--text-main);
+  font-weight: 600;
 }
 
 .el-input__wrapper {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px var(--border-subtle) inset;
+}
+
+.el-select__wrapper {
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px var(--border-subtle) inset;
 }
 
 /* ========================================
@@ -145,7 +168,7 @@
 }
 
 .sidebar .el-menu-item.is-active {
-  background-color: rgba(64, 158, 255, 0.1) !important;
+  background-color: var(--color-brand-soft) !important;
 }
 
 /* ========================================
