@@ -99,41 +99,40 @@
       </div>
     </div>
 
-    <!-- 快速筛选标签 -->
-    <div v-if="filters.quick_key" class="quick-filter-tag">
-      <span>当前筛选：{{ quickKeyLabel }}</span>
-      <el-button size="small" circle @click="clearQuickKey" class="clear-quick-btn">✕</el-button>
-    </div>
-
     <div class="filters">
       <el-input
+        class="filter-search"
         v-model="filters.search"
         placeholder="搜索 SKU / nmId / 买家 / 内容"
         clearable
         @keyup.enter="reload"
         @clear="reload"
       />
-      <el-select v-model="filters.shop_id" placeholder="店铺" clearable @change="reload">
+      <div v-if="filters.quick_key" class="quick-filter-tag">
+        <span>{{ quickKeyLabel }}</span>
+        <el-button size="small" circle @click="clearQuickKey" class="clear-quick-btn">✕</el-button>
+      </div>
+      <el-select class="filter-select filter-shop" v-model="filters.shop_id" placeholder="店铺" clearable @change="reload">
         <el-option v-for="shop in shops" :key="shop.id" :label="shop.name" :value="shop.id" />
       </el-select>
-      <el-select v-model="filters.owner" placeholder="负责人" clearable @change="reload">
+      <el-select class="filter-select filter-owner" v-model="filters.owner" placeholder="负责人" clearable @change="reload">
         <el-option v-for="owner in ownerOptions" :key="owner" :label="owner" :value="owner" />
       </el-select>
-      <el-select v-model="filters.channel" placeholder="类型" @change="handleChannelStatusChange">
+      <el-select class="filter-select filter-channel" v-model="filters.channel" placeholder="类型" @change="handleChannelStatusChange">
         <el-option label="全部类型" value="all" />
         <el-option label="问答" value="question" />
         <el-option label="评价" value="feedback" />
         <el-option label="买家聊天" value="chat" />
         <el-option label="退货申请" value="return_claim" />
       </el-select>
-      <el-select v-model="filters.status" placeholder="状态" @change="handleChannelStatusChange">
+      <el-select class="filter-select filter-status" v-model="filters.status" placeholder="状态" @change="handleChannelStatusChange">
         <el-option label="待回复" value="unanswered" />
         <el-option label="全部状态" value="all" />
         <el-option label="已回复待买家" value="replied" />
         <el-option label="内部处理中" value="pending_internal" />
         <el-option label="已关闭" value="closed" />
       </el-select>
-      <el-button type="primary" @click="reload">刷新</el-button>
+      <el-button class="filter-refresh" type="primary" @click="reload">刷新</el-button>
     </div>
 
     <div class="workspace">
@@ -1335,36 +1334,56 @@ function getReturnSlaClass(item) {
 .channel-item-num.danger { color: var(--color-danger); }
 
 .quick-filter-tag {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px 0 10px;
   background: var(--color-info-soft);
   border: 1px solid #bfdbfe;
-  border-radius: var(--radius-lg);
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
   color: var(--color-info);
-  font-weight: 600;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.quick-filter-tag span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .clear-quick-btn {
-  font-size: 11px;
-  padding: 2px 5px;
-  min-height: auto;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
   line-height: 1;
   color: var(--color-info);
   border-color: #bfdbfe;
+  flex-shrink: 0;
 }
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1.6fr) repeat(auto-fit, minmax(140px, 1fr)) auto;
-  gap: 8px;
+  grid-template-columns:
+    minmax(280px, 1fr)
+    minmax(0, auto)
+    132px
+    116px
+    112px
+    132px
+    72px;
+  gap: 6px;
+  align-items: center;
   background: var(--surface-panel);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: 10px;
+  padding: 8px;
 }
 
 .filters :deep(.el-select),
@@ -1373,7 +1392,14 @@ function getReturnSlaClass(item) {
   border-radius: var(--radius-md);
 }
 
-.filters .el-button { min-width: 88px; height: 32px; border-radius: var(--radius-md); }
+.filter-search { min-width: 0; }
+.filter-select { width: 100%; }
+.filter-refresh {
+  min-width: 72px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+}
 
 .workspace {
   display: grid;
@@ -2050,6 +2076,13 @@ function getReturnSlaClass(item) {
 }
 
 @media (max-width: 980px) {
+  .filters {
+    grid-template-columns: 1fr 1fr;
+  }
+  .filter-search,
+  .quick-filter-tag {
+    grid-column: 1 / -1;
+  }
   .workspace {
     grid-template-columns: 1fr;
     min-height: auto;
@@ -2081,7 +2114,7 @@ function getReturnSlaClass(item) {
   .detail-title-row h3 { font-size: 16px; }
   .queue-card-product-meta { grid-template-columns: 1fr; gap: 4px; }
   .queue-card-footer { flex-direction: column; gap: 4px; }
-  .quick-filter-tag { font-size: 12px; }
+  .quick-filter-tag { width: 100%; }
 }
 
 @media (min-width: 981px) {
