@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WB ERP 色彩方案对比 Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: #111827;
+      background: #eef1f6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .page {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    .top {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+    .sub {
+      color: #64748b;
+    }
+    .rule {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: #475569;
+    }
+    .rule span {
+      padding: 5px 8px;
+      border: 1px solid #d9dee8;
+      border-radius: 7px;
+      background: #fff;
+      font-weight: 650;
+    }
+    .variants {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .variant {
+      --brand: #2563eb;
+      --brand-soft: #eff6ff;
+      --brand-line: #bfdbfe;
+      --page: #f5f7fb;
+      --panel: #ffffff;
+      --muted: #f8fafc;
+      --line: #dbe2ee;
+      --line-strong: #c8d2e1;
+      --text: #111827;
+      --mid: #475569;
+      --soft: #7a8596;
+      --good: #047857;
+      --good-bg: #ecfdf5;
+      --warn: #b45309;
+      --warn-bg: #fff7ed;
+      --bad: #b91c1c;
+      --bad-bg: #fef2f2;
+      --info: #2563eb;
+      --info-bg: #eff6ff;
+      --feedback: #eaf8ef;
+      --question: #f5f3ff;
+      --return: #fff1f2;
+      --chat: #fff7ed;
+      --shadow: 0 1px 2px rgba(15, 23, 42, .05);
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--page);
+      box-shadow: 0 8px 22px rgba(15, 23, 42, .06);
+    }
+    .v-green {
+      --brand: #0f766e;
+      --brand-soft: #ecfdf5;
+      --brand-line: #99f6e4;
+      --page: #f3f6f4;
+      --muted: #f8fbf9;
+      --line: #d8e2dd;
+      --line-strong: #c4d4ce;
+      --info: #2563eb;
+      --info-bg: #eff6ff;
+      --question: #eef2ff;
+    }
+    .v-contrast {
+      --brand: #1d4ed8;
+      --brand-soft: #e0ecff;
+      --brand-line: #93c5fd;
+      --page: #f4f5f7;
+      --muted: #f0f3f7;
+      --line: #cfd6e2;
+      --line-strong: #aeb9ca;
+      --text: #0b1220;
+      --mid: #334155;
+      --soft: #64748b;
+      --good: #166534;
+      --warn: #92400e;
+      --bad: #991b1b;
+    }
+    .v-warm {
+      --brand: #475569;
+      --brand-soft: #f1f5f9;
+      --brand-line: #cbd5e1;
+      --page: #f7f7f4;
+      --muted: #fbfbf8;
+      --line: #deded5;
+      --line-strong: #ccccbf;
+      --info: #2563eb;
+      --info-bg: #eff6ff;
+      --question: #eef2ff;
+      --chat: #fff7ed;
+    }
+    .variant-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .variant-title {
+      font-size: 15px;
+      font-weight: 850;
+      color: var(--text);
+    }
+    .variant-note {
+      color: var(--soft);
+      font-size: 12px;
+    }
+    .swatches {
+      display: flex;
+      gap: 5px;
+      flex: 0 0 auto;
+    }
+    .swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      border: 1px solid rgba(0,0,0,.08);
+    }
+    .mock {
+      display: grid;
+      grid-template-columns: 126px minmax(0, 1fr);
+      min-height: 690px;
+    }
+    .sidebar {
+      padding: 10px 8px;
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      height: 34px;
+      margin-bottom: 8px;
+      padding: 0 8px;
+      color: var(--brand);
+      font-weight: 850;
+    }
+    .mark {
+      width: 23px;
+      height: 23px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: var(--brand);
+      font-size: 11px;
+    }
+    .nav {
+      display: grid;
+      gap: 3px;
+    }
+    .nav div {
+      height: 32px;
+      padding: 0 8px;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      color: var(--mid);
+      font-weight: 650;
+    }
+    .nav .active {
+      color: var(--brand);
+      background: var(--brand-soft);
+      box-shadow: inset 0 0 0 1px var(--brand-line);
+    }
+    .main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .bar {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .bar strong {
+      font-size: 14px;
+      color: var(--text);
+    }
+    .content {
+      display: grid;
+      gap: 10px;
+      padding: 10px;
+    }
+    .toolbar,
+    .note,
+    .matrix,
+    .panel,
+    .queue,
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: auto minmax(160px, 1fr) auto;
+      gap: 7px;
+      padding: 8px;
+      align-items: center;
+    }
+    .seg,
+    .input,
+    .btn {
+      height: 30px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: var(--panel);
+      display: inline-flex;
+      align-items: center;
+      white-space: nowrap;
+    }
+    .seg {
+      padding: 2px;
+      gap: 2px;
+    }
+    .seg span {
+      min-width: 38px;
+      height: 24px;
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+      color: var(--mid);
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .seg .on {
+      color: #fff;
+      background: var(--brand);
+    }
+    .input {
+      padding: 0 9px;
+      color: var(--mid);
+      justify-content: space-between;
+    }
+    .btn {
+      padding: 0 12px;
+      color: #fff;
+      border-color: var(--brand);
+      background: var(--brand);
+      font-weight: 800;
+    }
+    .note {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      padding: 7px 8px;
+      color: var(--mid);
+      background: var(--muted);
+    }
+    .pill {
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      font-weight: 650;
+      font-size: 12px;
+    }
+    .matrix {
+      overflow: hidden;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 112px repeat(3, minmax(0, 1fr));
+      border-top: 1px solid var(--line);
+      min-height: 52px;
+    }
+    .row:first-child { border-top: 0; }
+    .head {
+      background: var(--muted);
+      min-height: 44px;
+      font-weight: 800;
+      color: var(--mid);
+    }
+    .cell {
+      min-width: 0;
+      padding: 8px 9px;
+      border-left: 1px solid var(--line);
+    }
+    .cell:first-child { border-left: 0; }
+    .metric {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 800;
+      color: var(--mid);
+    }
+    .icon {
+      width: 21px;
+      height: 21px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      color: var(--brand);
+      background: var(--brand-soft);
+      font-weight: 900;
+      font-size: 12px;
+    }
+    .value-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .value {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+    }
+    .delta {
+      flex: 0 0 auto;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+    }
+    .good { color: var(--good); background: var(--good-bg); border-color: rgba(4,120,87,.22); }
+    .warn { color: var(--warn); background: var(--warn-bg); border-color: rgba(180,83,9,.24); }
+    .bad { color: var(--bad); background: var(--bad-bg); border-color: rgba(185,28,28,.22); }
+    .spark {
+      display: block;
+      width: 100%;
+      height: 24px;
+      margin-top: 5px;
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+    }
+    .panel-head {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 9px;
+      border-bottom: 1px solid var(--line);
+      background: var(--muted);
+      font-weight: 850;
+      color: var(--text);
+    }
+    .queue-list {
+      display: grid;
+      gap: 7px;
+      padding: 8px;
+    }
+    .ticket {
+      display: grid;
+      gap: 6px;
+      min-height: 96px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-left-width: 4px;
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .ticket.feedback { border-left-color: #38a169; background: linear-gradient(90deg, var(--feedback), var(--panel) 34%); }
+    .ticket.question { border-left-color: #6366f1; background: linear-gradient(90deg, var(--question), var(--panel) 34%); }
+    .ticket.return { border-left-color: #ef4444; background: linear-gradient(90deg, var(--return), var(--panel) 34%); }
+    .ticket.chat { border-left-color: #f59e0b; background: linear-gradient(90deg, var(--chat), var(--panel) 34%); }
+    .ticket-top,
+    .ticket-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      color: var(--soft);
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 7px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .tag.info { color: var(--info); background: var(--info-bg); border-color: rgba(37,99,235,.22); }
+    .ticket-title {
+      color: var(--text);
+      font-weight: 850;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .ticket-text {
+      color: var(--mid);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .detail-body {
+      display: grid;
+      gap: 9px;
+      padding: 10px;
+    }
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+    }
+    .mini {
+      padding: 7px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--muted);
+    }
+    .mini div:first-child {
+      color: var(--soft);
+      font-size: 11px;
+    }
+    .mini div:last-child {
+      margin-top: 2px;
+      color: var(--text);
+      font-weight: 850;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      font-size: 12px;
+    }
+    th {
+      height: 32px;
+      text-align: left;
+      padding: 0 8px;
+      color: var(--mid);
+      background: var(--muted);
+      border-bottom: 1px solid var(--line);
+      font-weight: 850;
+    }
+    td {
+      height: 36px;
+      padding: 0 8px;
+      color: var(--mid);
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+    td strong { color: var(--text); }
+    tr:last-child td { border-bottom: 0; }
+    .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      font-weight: 760;
+    }
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .ad-bars {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+    }
+    .ad-row {
+      display: grid;
+      grid-template-columns: 82px 1fr 50px;
+      gap: 8px;
+      align-items: center;
+      color: var(--mid);
+      font-weight: 700;
+    }
+    .track {
+      height: 9px;
+      border-radius: 999px;
+      background: var(--muted);
+      overflow: hidden;
+    }
+    .fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--brand);
+    }
+    @media (max-width: 1100px) {
+      .variants { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 760px) {
+      .mock { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .workspace,
+      .split,
+      .toolbar { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 96px repeat(3, minmax(150px, 1fr)); min-width: 610px; }
+      .matrix { overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="top">
+      <div>
+        <h1>UI 色彩方案对比</h1>
+        <div class="sub">不改变现有结构，只比较颜色、状态语义、背景、边框、hover 感和数据重点。</div>
+      </div>
+      <div class="rule">
+        <span>同结构</span>
+        <span>只换视觉层</span>
+        <span>聚焦数据变化</span>
+        <span>红黄绿只表达业务状态</span>
+      </div>
+    </div>
+
+    <div class="variants">
+      <section class="variant v-blue">
+        <div class="variant-head">
+          <div>
+            <div class="variant-title">方案 A：蓝灰运营版</div>
+            <div class="variant-note">最稳，适合销售看板和广告分析长期阅读。</div>
+          </div>
+          <div class="swatches"><span class="swatch" style="background:#2563eb"></span><span class="swatch" style="background:#059669"></span><span class="swatch" style="background:#b45309"></span><span class="swatch" style="background:#b91c1c"></span></div>
+        </div>
+        <div class="mock">
+          <aside class="sidebar"><div class="brand"><span class="mark">WB</span>ERP</div><div class="nav"><div class="active">销售看板</div><div>广告分析</div><div>客服工作台</div><div>运营日志</div></div></aside>
+          <main class="main">
+            <div class="bar"><strong>销售看板</strong><span class="sub">昨日 / 全部店铺</span></div>
+            <div class="content">
+              <div class="toolbar"><div class="seg"><span>今天</span><span class="on">昨日</span><span>7天</span></div><div class="input">全部产品 / SKU / 负责人 <span>⌕</span></div><button class="btn">查询</button></div>
+              <div class="note"><span class="pill">数据更新时间 06:15</span><span class="pill">1 CNY = 11 RUB</span><span class="pill">统一折算 RUB</span></div>
+              <div class="matrix">
+                <div class="row head"><div class="cell">指标</div><div class="cell">统一卢布</div><div class="cell">RUB 店铺</div><div class="cell">CNY 店铺</div></div>
+                <div class="row"><div class="cell metric"><span class="icon">¥</span>销售额</div><div class="cell"><div class="value-line"><span class="value">1 248 930 ₽</span><span class="delta good">+8.4%</span></div><svg class="spark" viewBox="0 0 160 24"><polyline points="0,20 28,15 52,16 78,8 105,11 132,6 160,3" fill="none" stroke="var(--good)" stroke-width="2"/></svg></div><div class="cell"><div class="value-line"><span class="value">943 260 ₽</span><span class="delta good">+5.1%</span></div></div><div class="cell"><div class="value-line"><span class="value">27 788 ¥</span><span class="delta bad">-2.2%</span></div></div></div>
+                <div class="row"><div class="cell metric"><span class="icon">%</span>广告占比</div><div class="cell"><div class="value-line"><span class="value">13.82%</span><span class="delta bad">+1.5%</span></div></div><div class="cell"><div class="value-line"><span class="value">11.24%</span><span class="delta good">-0.8%</span></div></div><div class="cell"><div class="value-line"><span class="value">18.31%</span><span class="delta bad">+2.6%</span></div></div></div>
+              </div>
+              <div class="workspace">
+                <div class="queue"><div class="panel-head"><span>客服队列</span><span class="tag bad">12 待处理</span></div><div class="queue-list"><div class="ticket feedback"><div class="ticket-top"><span><span class="tag bad">评价</span> <span class="tag bad">差评待回复</span></span><span>10:42</span></div><div class="ticket-title">厨房置物架三层可移动收纳架 白色款</div><div class="ticket-text">包装破损，轮子缺一个，需要补发配件。</div><div class="ticket-foot"><span>炊恒WB</span><span>Anna</span></div></div><div class="ticket chat"><div class="ticket-top"><span><span class="tag warn">聊天</span> <span class="tag warn">待卖家回复</span></span><span>昨天</span></div><div class="ticket-title">浴室防滑垫 大尺寸灰色</div><div class="ticket-text">买家确认包裹是否已经发出。</div><div class="ticket-foot"><span>157WB</span><span>Olga</span></div></div></div></div>
+                <div class="detail"><div class="panel-head"><span>产品变化表</span><span class="tag info">变化优先</span></div><div class="detail-body"><div class="mini-grid"><div class="mini"><div>加购率</div><div class="bad">-21.3%</div></div><div class="mini"><div>转化率</div><div class="bad">-8.4%</div></div><div class="mini"><div>访客</div><div class="good">+11.7%</div></div><div class="mini"><div>广告占比</div><div class="warn">+2.6%</div></div></div><table><thead><tr><th>产品</th><th class="num">销售变化</th><th class="num">广告占比</th><th>状态</th></tr></thead><tbody><tr><td><strong>厨房置物架</strong></td><td class="num good">+8.4%</td><td class="num bad">18.31%</td><td><span class="tag bad">处理</span></td></tr><tr><td><strong>收纳盒 4 件套</strong></td><td class="num bad">-12.8%</td><td class="num warn">15.04%</td><td><span class="tag warn">观察</span></td></tr></tbody></table></div></div>
+              </div>
+              <div class="split"><div class="panel"><div class="panel-head">广告变化拆解</div><div class="ad-bars"><div class="ad-row"><span>CPM推荐</span><div class="track"><div class="fill" style="width:68%"></div></div><span class="bad">+18%</span></div><div class="ad-row"><span>CPC搜索</span><div class="track"><div class="fill" style="width:45%"></div></div><span class="good">-6%</span></div><div class="ad-row"><span>自然流量</span><div class="track"><div class="fill" style="width:76%"></div></div><span class="good">+11%</span></div></div></div><div class="panel"><div class="panel-head">日志关联</div><table><tbody><tr><td>07-18</td><td><strong>降低预算</strong></td><td><span class="tag warn">待追踪</span></td></tr><tr><td>07-17</td><td><strong>补充尺寸图</strong></td><td><span class="tag good">正向</span></td></tr></tbody></table></div></div>
+            </div>
+          </main>
+        </div>
+      </section>
+
+      <section class="variant v-green">
+        <div class="variant-head">
+          <div><div class="variant-title">方案 B：青绿效率版</div><div class="variant-note">更安静，适合客服工作台和长时间值守。</div></div>
+          <div class="swatches"><span class="swatch" style="background:#0f766e"></span><span class="swatch" style="background:#047857"></span><span class="swatch" style="background:#b45309"></span><span class="swatch" style="background:#b91c1c"></span></div>
+        </div>
+        <div class="mock">
+          <aside class="sidebar"><div class="brand"><span class="mark">WB</span>ERP</div><div class="nav"><div class="active">销售看板</div><div>广告分析</div><div>客服工作台</div><div>运营日志</div></div></aside>
+          <main class="main">
+            <div class="bar"><strong>销售看板</strong><span class="sub">昨日 / 全部店铺</span></div>
+            <div class="content">
+              <div class="toolbar"><div class="seg"><span>今天</span><span class="on">昨日</span><span>7天</span></div><div class="input">全部产品 / SKU / 负责人 <span>⌕</span></div><button class="btn">查询</button></div>
+              <div class="note"><span class="pill">数据更新时间 06:15</span><span class="pill">1 CNY = 11 RUB</span><span class="pill">统一折算 RUB</span></div>
+              <div class="matrix"><div class="row head"><div class="cell">指标</div><div class="cell">统一卢布</div><div class="cell">RUB 店铺</div><div class="cell">CNY 店铺</div></div><div class="row"><div class="cell metric"><span class="icon">¥</span>销售额</div><div class="cell"><div class="value-line"><span class="value">1 248 930 ₽</span><span class="delta good">+8.4%</span></div><svg class="spark" viewBox="0 0 160 24"><polyline points="0,20 28,15 52,16 78,8 105,11 132,6 160,3" fill="none" stroke="var(--good)" stroke-width="2"/></svg></div><div class="cell"><div class="value-line"><span class="value">943 260 ₽</span><span class="delta good">+5.1%</span></div></div><div class="cell"><div class="value-line"><span class="value">27 788 ¥</span><span class="delta bad">-2.2%</span></div></div></div><div class="row"><div class="cell metric"><span class="icon">%</span>广告占比</div><div class="cell"><div class="value-line"><span class="value">13.82%</span><span class="delta bad">+1.5%</span></div></div><div class="cell"><div class="value-line"><span class="value">11.24%</span><span class="delta good">-0.8%</span></div></div><div class="cell"><div class="value-line"><span class="value">18.31%</span><span class="delta bad">+2.6%</span></div></div></div></div>
+              <div class="workspace"><div class="queue"><div class="panel-head"><span>客服队列</span><span class="tag bad">12 待处理</span></div><div class="queue-list"><div class="ticket feedback"><div class="ticket-top"><span><span class="tag bad">评价</span> <span class="tag bad">差评待回复</span></span><span>10:42</span></div><div class="ticket-title">厨房置物架三层可移动收纳架 白色款</div><div class="ticket-text">包装破损，轮子缺一个，需要补发配件。</div><div class="ticket-foot"><span>炊恒WB</span><span>Anna</span></div></div><div class="ticket chat"><div class="ticket-top"><span><span class="tag warn">聊天</span> <span class="tag warn">待卖家回复</span></span><span>昨天</span></div><div class="ticket-title">浴室防滑垫 大尺寸灰色</div><div class="ticket-text">买家确认包裹是否已经发出。</div><div class="ticket-foot"><span>157WB</span><span>Olga</span></div></div></div></div><div class="detail"><div class="panel-head"><span>产品变化表</span><span class="tag info">变化优先</span></div><div class="detail-body"><div class="mini-grid"><div class="mini"><div>加购率</div><div class="bad">-21.3%</div></div><div class="mini"><div>转化率</div><div class="bad">-8.4%</div></div><div class="mini"><div>访客</div><div class="good">+11.7%</div></div><div class="mini"><div>广告占比</div><div class="warn">+2.6%</div></div></div><table><thead><tr><th>产品</th><th class="num">销售变化</th><th class="num">广告占比</th><th>状态</th></tr></thead><tbody><tr><td><strong>厨房置物架</strong></td><td class="num good">+8.4%</td><td class="num bad">18.31%</td><td><span class="tag bad">处理</span></td></tr><tr><td><strong>收纳盒 4 件套</strong></td><td class="num bad">-12.8%</td><td class="num warn">15.04%</td><td><span class="tag warn">观察</span></td></tr></tbody></table></div></div></div>
+              <div class="split"><div class="panel"><div class="panel-head">广告变化拆解</div><div class="ad-bars"><div class="ad-row"><span>CPM推荐</span><div class="track"><div class="fill" style="width:68%"></div></div><span class="bad">+18%</span></div><div class="ad-row"><span>CPC搜索</span><div class="track"><div class="fill" style="width:45%"></div></div><span class="good">-6%</span></div><div class="ad-row"><span>自然流量</span><div class="track"><div class="fill" style="width:76%"></div></div><span class="good">+11%</span></div></div></div><div class="panel"><div class="panel-head">日志关联</div><table><tbody><tr><td>07-18</td><td><strong>降低预算</strong></td><td><span class="tag warn">待追踪</span></td></tr><tr><td>07-17</td><td><strong>补充尺寸图</strong></td><td><span class="tag good">正向</span></td></tr></tbody></table></div></div>
+            </div>
+          </main>
+        </div>
+      </section>
+
+      <section class="variant v-contrast">
+        <div class="variant-head">
+          <div><div class="variant-title">方案 C：高对比风控版</div><div class="variant-note">状态最醒目，适合异常优先和预警队列。</div></div>
+          <div class="swatches"><span class="swatch" style="background:#1d4ed8"></span><span class="swatch" style="background:#166534"></span><span class="swatch" style="background:#92400e"></span><span class="swatch" style="background:#991b1b"></span></div>
+        </div>
+        <div class="mock">
+          <aside class="sidebar"><div class="brand"><span class="mark">WB</span>ERP</div><div class="nav"><div class="active">销售看板</div><div>广告分析</div><div>客服工作台</div><div>运营日志</div></div></aside>
+          <main class="main">
+            <div class="bar"><strong>销售看板</strong><span class="sub">昨日 / 全部店铺</span></div>
+            <div class="content">
+              <div class="toolbar"><div class="seg"><span>今天</span><span class="on">昨日</span><span>7天</span></div><div class="input">全部产品 / SKU / 负责人 <span>⌕</span></div><button class="btn">查询</button></div>
+              <div class="note"><span class="pill">数据更新时间 06:15</span><span class="pill">1 CNY = 11 RUB</span><span class="pill">统一折算 RUB</span></div>
+              <div class="matrix"><div class="row head"><div class="cell">指标</div><div class="cell">统一卢布</div><div class="cell">RUB 店铺</div><div class="cell">CNY 店铺</div></div><div class="row"><div class="cell metric"><span class="icon">¥</span>销售额</div><div class="cell"><div class="value-line"><span class="value">1 248 930 ₽</span><span class="delta good">+8.4%</span></div><svg class="spark" viewBox="0 0 160 24"><polyline points="0,20 28,15 52,16 78,8 105,11 132,6 160,3" fill="none" stroke="var(--good)" stroke-width="2"/></svg></div><div class="cell"><div class="value-line"><span class="value">943 260 ₽</span><span class="delta good">+5.1%</span></div></div><div class="cell"><div class="value-line"><span class="value">27 788 ¥</span><span class="delta bad">-2.2%</span></div></div></div><div class="row"><div class="cell metric"><span class="icon">%</span>广告占比</div><div class="cell"><div class="value-line"><span class="value">13.82%</span><span class="delta bad">+1.5%</span></div></div><div class="cell"><div class="value-line"><span class="value">11.24%</span><span class="delta good">-0.8%</span></div></div><div class="cell"><div class="value-line"><span class="value">18.31%</span><span class="delta bad">+2.6%</span></div></div></div></div>
+              <div class="workspace"><div class="queue"><div class="panel-head"><span>客服队列</span><span class="tag bad">12 待处理</span></div><div class="queue-list"><div class="ticket feedback"><div class="ticket-top"><span><span class="tag bad">评价</span> <span class="tag bad">差评待回复</span></span><span>10:42</span></div><div class="ticket-title">厨房置物架三层可移动收纳架 白色款</div><div class="ticket-text">包装破损，轮子缺一个，需要补发配件。</div><div class="ticket-foot"><span>炊恒WB</span><span>Anna</span></div></div><div class="ticket chat"><div class="ticket-top"><span><span class="tag warn">聊天</span> <span class="tag warn">待卖家回复</span></span><span>昨天</span></div><div class="ticket-title">浴室防滑垫 大尺寸灰色</div><div class="ticket-text">买家确认包裹是否已经发出。</div><div class="ticket-foot"><span>157WB</span><span>Olga</span></div></div></div></div><div class="detail"><div class="panel-head"><span>产品变化表</span><span class="tag info">变化优先</span></div><div class="detail-body"><div class="mini-grid"><div class="mini"><div>加购率</div><div class="bad">-21.3%</div></div><div class="mini"><div>转化率</div><div class="bad">-8.4%</div></div><div class="mini"><div>访客</div><div class="good">+11.7%</div></div><div class="mini"><div>广告占比</div><div class="warn">+2.6%</div></div></div><table><thead><tr><th>产品</th><th class="num">销售变化</th><th class="num">广告占比</th><th>状态</th></tr></thead><tbody><tr><td><strong>厨房置物架</strong></td><td class="num good">+8.4%</td><td class="num bad">18.31%</td><td><span class="tag bad">处理</span></td></tr><tr><td><strong>收纳盒 4 件套</strong></td><td class="num bad">-12.8%</td><td class="num warn">15.04%</td><td><span class="tag warn">观察</span></td></tr></tbody></table></div></div></div>
+              <div class="split"><div class="panel"><div class="panel-head">广告变化拆解</div><div class="ad-bars"><div class="ad-row"><span>CPM推荐</span><div class="track"><div class="fill" style="width:68%"></div></div><span class="bad">+18%</span></div><div class="ad-row"><span>CPC搜索</span><div class="track"><div class="fill" style="width:45%"></div></div><span class="good">-6%</span></div><div class="ad-row"><span>自然流量</span><div class="track"><div class="fill" style="width:76%"></div></div><span class="good">+11%</span></div></div></div><div class="panel"><div class="panel-head">日志关联</div><table><tbody><tr><td>07-18</td><td><strong>降低预算</strong></td><td><span class="tag warn">待追踪</span></td></tr><tr><td>07-17</td><td><strong>补充尺寸图</strong></td><td><span class="tag good">正向</span></td></tr></tbody></table></div></div>
+            </div>
+          </main>
+        </div>
+      </section>
+
+      <section class="variant v-warm">
+        <div class="variant-head">
+          <div><div class="variant-title">方案 D：暖灰低噪版</div><div class="variant-note">最少品牌色，适合运营日志和表格扫描。</div></div>
+          <div class="swatches"><span class="swatch" style="background:#475569"></span><span class="swatch" style="background:#047857"></span><span class="swatch" style="background:#b45309"></span><span class="swatch" style="background:#b91c1c"></span></div>
+        </div>
+        <div class="mock">
+          <aside class="sidebar"><div class="brand"><span class="mark">WB</span>ERP</div><div class="nav"><div class="active">销售看板</div><div>广告分析</div><div>客服工作台</div><div>运营日志</div></div></aside>
+          <main class="main">
+            <div class="bar"><strong>销售看板</strong><span class="sub">昨日 / 全部店铺</span></div>
+            <div class="content">
+              <div class="toolbar"><div class="seg"><span>今天</span><span class="on">昨日</span><span>7天</span></div><div class="input">全部产品 / SKU / 负责人 <span>⌕</span></div><button class="btn">查询</button></div>
+              <div class="note"><span class="pill">数据更新时间 06:15</span><span class="pill">1 CNY = 11 RUB</span><span class="pill">统一折算 RUB</span></div>
+              <div class="matrix"><div class="row head"><div class="cell">指标</div><div class="cell">统一卢布</div><div class="cell">RUB 店铺</div><div class="cell">CNY 店铺</div></div><div class="row"><div class="cell metric"><span class="icon">¥</span>销售额</div><div class="cell"><div class="value-line"><span class="value">1 248 930 ₽</span><span class="delta good">+8.4%</span></div><svg class="spark" viewBox="0 0 160 24"><polyline points="0,20 28,15 52,16 78,8 105,11 132,6 160,3" fill="none" stroke="var(--good)" stroke-width="2"/></svg></div><div class="cell"><div class="value-line"><span class="value">943 260 ₽</span><span class="delta good">+5.1%</span></div></div><div class="cell"><div class="value-line"><span class="value">27 788 ¥</span><span class="delta bad">-2.2%</span></div></div></div><div class="row"><div class="cell metric"><span class="icon">%</span>广告占比</div><div class="cell"><div class="value-line"><span class="value">13.82%</span><span class="delta bad">+1.5%</span></div></div><div class="cell"><div class="value-line"><span class="value">11.24%</span><span class="delta good">-0.8%</span></div></div><div class="cell"><div class="value-line"><span class="value">18.31%</span><span class="delta bad">+2.6%</span></div></div></div></div>
+              <div class="workspace"><div class="queue"><div class="panel-head"><span>客服队列</span><span class="tag bad">12 待处理</span></div><div class="queue-list"><div class="ticket feedback"><div class="ticket-top"><span><span class="tag bad">评价</span> <span class="tag bad">差评待回复</span></span><span>10:42</span></div><div class="ticket-title">厨房置物架三层可移动收纳架 白色款</div><div class="ticket-text">包装破损，轮子缺一个，需要补发配件。</div><div class="ticket-foot"><span>炊恒WB</span><span>Anna</span></div></div><div class="ticket chat"><div class="ticket-top"><span><span class="tag warn">聊天</span> <span class="tag warn">待卖家回复</span></span><span>昨天</span></div><div class="ticket-title">浴室防滑垫 大尺寸灰色</div><div class="ticket-text">买家确认包裹是否已经发出。</div><div class="ticket-foot"><span>157WB</span><span>Olga</span></div></div></div></div><div class="detail"><div class="panel-head"><span>产品变化表</span><span class="tag info">变化优先</span></div><div class="detail-body"><div class="mini-grid"><div class="mini"><div>加购率</div><div class="bad">-21.3%</div></div><div class="mini"><div>转化率</div><div class="bad">-8.4%</div></div><div class="mini"><div>访客</div><div class="good">+11.7%</div></div><div class="mini"><div>广告占比</div><div class="warn">+2.6%</div></div></div><table><thead><tr><th>产品</th><th class="num">销售变化</th><th class="num">广告占比</th><th>状态</th></tr></thead><tbody><tr><td><strong>厨房置物架</strong></td><td class="num good">+8.4%</td><td class="num bad">18.31%</td><td><span class="tag bad">处理</span></td></tr><tr><td><strong>收纳盒 4 件套</strong></td><td class="num bad">-12.8%</td><td class="num warn">15.04%</td><td><span class="tag warn">观察</span></td></tr></tbody></table></div></div></div>
+              <div class="split"><div class="panel"><div class="panel-head">广告变化拆解</div><div class="ad-bars"><div class="ad-row"><span>CPM推荐</span><div class="track"><div class="fill" style="width:68%"></div></div><span class="bad">+18%</span></div><div class="ad-row"><span>CPC搜索</span><div class="track"><div class="fill" style="width:45%"></div></div><span class="good">-6%</span></div><div class="ad-row"><span>自然流量</span><div class="track"><div class="fill" style="width:76%"></div></div><span class="good">+11%</span></div></div></div><div class="panel"><div class="panel-head">日志关联</div><table><tbody><tr><td>07-18</td><td><strong>降低预算</strong></td><td><span class="tag warn">待追踪</span></td></tr><tr><td>07-17</td><td><strong>补充尺寸图</strong></td><td><span class="tag good">正向</span></td></tr></tbody></table></div></div>
+            </div>
+          </main>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
