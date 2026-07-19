@@ -845,11 +845,11 @@ def get_product_ads(
     ad_details = []
     for r in ad_details_query:
         date_str = r.record_date.strftime("%Y-%m-%d") if isinstance(r.record_date, datetime) else str(r.record_date)[:10]
-        clicks = r.clicks or 0
-        impressions = r.impressions or 0
-        orders = r.orders or 0
-        cost = r.cost or 0
-        sales = r.sales or 0
+        clicks = float(r.clicks) if r.clicks else 0.0
+        impressions = float(r.impressions) if r.impressions else 0.0
+        orders = float(r.orders) if r.orders else 0.0
+        cost = float(r.cost) if r.cost else 0.0
+        sales = float(r.sales) if r.sales else 0.0
 
         # 根据 payment_type 和 placements 计算广告类型
         ad_type = get_ad_type(r.payment_type, r.placements)
