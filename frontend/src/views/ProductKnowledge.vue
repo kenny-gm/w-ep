@@ -119,15 +119,19 @@
               </div>
               <div v-for="(faq, index) in form.faq" :key="index" class="faq-item">
                 <el-input v-model="faq.question" placeholder="买家可能怎么问" />
-                <el-input v-model="faq.answer_ru" type="textarea" :rows="3" placeholder="俄语标准回答" />
-                <el-input v-model="faq.answer_zh" type="textarea" :rows="2" placeholder="中文内部说明" />
+                <el-input v-model="faq.answer_zh" type="textarea" :rows="3" placeholder="中文标准答案/处理说明，AI 会自动生成俄语草稿" />
                 <el-button text type="danger" @click="removeFaq(index)">删除</el-button>
               </div>
             </el-tab-pane>
-            <el-tab-pane label="俄语示例" name="examples">
+            <el-tab-pane label="AI回复要求" name="examples">
               <el-form label-position="top">
-                <el-form-item label="俄语回复示例">
-                  <el-input v-model="form.answer_examples_ru" type="textarea" :rows="8" />
+                <el-form-item label="AI回复风格/语气要求（中文填写，俄语由大模型生成）">
+                  <el-input
+                    v-model="form.answer_examples_ru"
+                    type="textarea"
+                    :rows="8"
+                    placeholder="例如：语气礼貌简洁；先感谢买家；只解释产品使用方法；不要承诺退款、赔偿、补发或物流时效。"
+                  />
                 </el-form-item>
                 <el-form-item label="中文内部备注">
                   <el-input v-model="form.internal_notes_zh" type="textarea" :rows="6" />
@@ -251,7 +255,7 @@ async function openItem(row) {
 }
 
 function addFaq() {
-  form.faq.push({ question: '', answer_ru: '', answer_zh: '', ai_enabled: true })
+  form.faq.push({ question: '', answer_zh: '', ai_enabled: true })
 }
 
 function removeFaq(index) {

@@ -308,7 +308,7 @@ def build_product_knowledge_context(db: Session, item: CustomerServiceItem) -> D
         ("故障处理", profile.troubleshooting),
         ("售后边界", profile.after_sales_policy),
         ("回复禁区", profile.reply_rules),
-        ("俄语示例", profile.answer_examples_ru),
+        ("AI回复风格要求", profile.answer_examples_ru),
         ("内部备注", profile.internal_notes_zh),
     ]
     lines = [f"产品知识库: {profile.product_name}"]
@@ -319,10 +319,13 @@ def build_product_knowledge_context(db: Session, item: CustomerServiceItem) -> D
         lines.append("FAQ:")
         for row in faq[:8]:
             question = str(row.get("question") or row.get("q") or "").strip()
-            answer_ru = str(row.get("answer_ru") or row.get("answer") or "").strip()
             answer_zh = str(row.get("answer_zh") or row.get("note") or "").strip()
-            if question or answer_ru or answer_zh:
-                lines.append(f"- 问: {question}\n  俄语答: {answer_ru}\n  中文说明: {answer_zh}")
+            answer_ru = str(row.get("answer_ru") or row.get("answer") or "").strip()
+            if question or answer_zh or answer_ru:
+                line = f"- 买家可能问: {question}\n  中文标准答案/处理说明: {answer_zh}"
+                if answer_ru:
+                    line += f"\n  历史俄语参考: {answer_ru}"
+                lines.append(line)
     return {
         "context": "\n".join(lines),
         "sources": [{
