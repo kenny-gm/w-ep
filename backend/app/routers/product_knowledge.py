@@ -99,14 +99,28 @@ def _translate_basic_info_to_zh(db: Session, basic_info: str) -> str:
     system_prompt = (
         "你是跨境电商产品资料翻译助手。只做事实翻译和结构化整理，"
         "不要添加原文没有的信息，不要写营销夸张语，不要写客服回复话术。"
+        "不要输出思考过程，不要输出<think>标签，只输出中文整理结果。"
     )
-    user_prompt = (
-        "请把下面 WB 商品卡基础信息翻译并整理成中文，保留标题、品牌、类目、描述、参数/属性结构。"
-        "输出纯中文文本，不要输出 JSON，不要解释。\n\n"
-        f"{source}"
-    )
+    source_variants = [source[:2500]]
+    if len(source) > 1400:
+        source_variants.append(source[:1400])
     try:
-        return AIClient(db).chat_text(system_prompt, user_prompt, temperature=0.1, max_tokens=1400).strip()
+        client = AIClient(db)
+        for index, text in enumerate(source_variants):
+            user_prompt = (
+                "请把下面 WB 商品卡基础信息翻译并整理成中文，保留标题、品牌、类目、描述、参数/属性结构。"
+                "输出纯中文文本，不要输出 JSON，不要解释，控制在 1000 字以内。\n\n"
+                f"{text}"
+            )
+            result = client.chat_text(
+                system_prompt,
+                user_prompt,
+                temperature=0.1,
+                max_tokens=1600 if index == 0 else 1000,
+            ).strip()
+            if result:
+                return result
+        raise AIClientError("AI 返回空中文整理")
     except AIClientDisabled as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except AIClientError as exc:
@@ -119,7 +133,10 @@ def _try_translate_basic_info_to_zh(db: Session, profile: ProductKnowledge) -> b
         profile.basic_info_zh = ""
         return False
     try:
-        profile.basic_info_zh = _translate_basic_info_to_zh(db, profile.basic_info or "")
+        translated = _translate_basic_info_to_zh(db, profile.basic_info or "").strip()
+        if not translated:
+            return False
+        profile.basic_info_zh = translated
         return True
     except HTTPException as exc:
         logger.warning(
