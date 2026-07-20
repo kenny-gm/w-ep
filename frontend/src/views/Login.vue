@@ -314,20 +314,38 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 
 /* 移动端适配 */
 @media (max-width: 480px) {
+  .login-container {
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100dvh;
+    padding: max(18px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    overflow-x: hidden;
+  }
+
   .login-card {
-    padding: 24px 20px;
+    max-width: 378px;
+    padding: 24px 18px;
+    margin-top: min(12dvh, 72px);
   }
   
   .logo {
     font-size: 40px;
   }
+
+  .logo-img {
+    max-width: 168px;
+    height: 56px;
+  }
   
   .login-header h1 {
     font-size: 20px;
+    overflow-wrap: anywhere;
   }
   
   .login-header p {
     font-size: 12px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
   }
 }
 </style>

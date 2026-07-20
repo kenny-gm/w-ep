@@ -432,4 +432,83 @@ onMounted(fetchKnowledge)
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 430px) {
+  .product-knowledge {
+    gap: 10px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input,
+  .status-select {
+    width: 100%;
+  }
+
+  .summary-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .metric {
+    padding: 10px;
+  }
+
+  .metric span {
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .metric strong {
+    font-size: 18px;
+  }
+
+  .content-grid {
+    gap: 10px;
+  }
+
+  .list-panel {
+    overflow-x: auto;
+  }
+
+  .list-panel :deep(.el-table) {
+    min-width: 720px;
+  }
+
+  .list-panel :deep(.el-table__inner-wrapper) {
+    max-height: 48dvh;
+  }
+
+  .detail-panel {
+    padding: 12px;
+    min-height: auto;
+  }
+
+  .detail-head {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .detail-head h2 {
+    font-size: 17px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .head-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .head-actions :deep(.el-button) {
+    flex: 1 1 120px;
+  }
+
+  .knowledge-tabs :deep(.el-tabs__content) {
+    padding-top: 10px;
+  }
+}
 </style>

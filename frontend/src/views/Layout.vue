@@ -607,14 +607,46 @@ h1, h2, h3, h4, h5, h6, p, span, div {
 @media (max-width: 767px) {
   .main-content {
     padding: 10px;
+    min-width: 0;
+    overflow-x: hidden;
   }
 
   .header {
     height: 52px;
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
   }
 
   .page-title {
     font-size: 15px;
+    max-width: calc(100vw - 172px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-info {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+  }
+
+  .username {
+    display: none;
+  }
+
+  .sidebar-mobile {
+    width: min(82vw, 280px) !important;
+    min-width: min(82vw, 280px) !important;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .sidebar :deep(.el-menu-item),
+  .sidebar :deep(.el-sub-menu__title) {
+    min-height: 44px;
+    height: 44px;
+    line-height: 44px;
+    font-size: 14px;
   }
 }
 </style>

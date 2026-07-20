@@ -805,4 +805,50 @@ onMounted(async () => {
     box-shadow: 1px 0 0 var(--border-subtle);
   }
 }
+
+@media (max-width: 430px) {
+  .filter-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .filter-item,
+  .filter-item.flex-1 {
+    width: 100%;
+  }
+
+  .metric-matrix {
+    margin-inline: -2px;
+  }
+
+  .matrix-row {
+    grid-template-columns: 96px repeat(3, minmax(148px, 1fr));
+    min-width: 620px;
+  }
+
+  .matrix-metric-heading,
+  .matrix-section-heading,
+  .matrix-metric-label,
+  .matrix-value-cell {
+    padding: 10px;
+  }
+
+  .matrix-value {
+    font-size: 15px;
+  }
+
+  .card-header,
+  .detail-toolbar,
+  .log-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .product-detail {
+    padding: 10px;
+  }
+}
 </style>

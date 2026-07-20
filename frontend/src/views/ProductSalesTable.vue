@@ -819,10 +819,31 @@ async function prefetchLogsForDateRange() {
     max-height: 60vh;
     overflow: auto;
   }
+  .tree-table {
+    min-width: 920px;
+  }
   .tree-table th, .tree-table td {
     padding: 6px 8px;
     font-size: 12px;
   }
   .tree-table th { font-size: 11px; }
+}
+
+@media (max-width: 430px) {
+  .table-container {
+    margin-inline: -2px;
+  }
+
+  .table-scroll {
+    max-height: 62dvh;
+  }
+
+  .tree-table {
+    min-width: 860px;
+  }
+
+  .log-vertical-table table {
+    min-width: 520px;
+  }
 }
 </style>

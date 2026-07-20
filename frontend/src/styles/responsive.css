@@ -9,6 +9,277 @@
   }
 }
 
+/* ========== iPhone 17 Pro 基准移动端适配 ==========
+   目标视口：402 x 874 CSS px，兼容 390-430px iPhone 机型。
+   原则：页面单列、工具栏可换行、表格横向滚动、触控目标不小于 44px。
+*/
+@media (max-width: 430px) {
+  html,
+  body,
+  #app {
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  body {
+    font-size: 14px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .main-content {
+    min-width: 0 !important;
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)) !important;
+    overflow-x: hidden;
+  }
+
+  .page-surface,
+  .dashboard,
+  .ad-analysis,
+  .customer-service-page,
+  .product-knowledge,
+  .admin-layout,
+  .logs-container,
+  .products,
+  .ai-prompts,
+  .ai-settings,
+  .menu-settings-page,
+  .ui-settings-page,
+  .users-page,
+  .admin-shops,
+  .admin-settings,
+  .sync-schedules,
+  .metric-thresholds {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 8px !important;
+    gap: 10px !important;
+  }
+
+  .filter-bar,
+  .filter-section,
+  .filter-card,
+  .toolbar,
+  .filters,
+  .data-info-bar,
+  .card-header,
+  .panel-header {
+    width: 100% !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+
+  .filter-item,
+  .toolbar-actions,
+  .action-buttons,
+  .head-actions,
+  .detail-actions,
+  .reply-toolbar,
+  .reply-actions,
+  .dialog-footer {
+    width: 100% !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .toolbar-title,
+  .toolbar-title h2,
+  .toolbar-title span,
+  .card-header h3,
+  .panel-header h3 {
+    min-width: 0 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .el-button,
+  .el-input,
+  .el-select,
+  .el-date-editor,
+  .el-input-number,
+  .el-cascader,
+  .el-radio-group,
+  .el-checkbox-group,
+  .el-button-group,
+  .filter,
+  .search-input,
+  .status-select {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .el-button {
+    min-height: 44px !important;
+    padding-inline: 12px !important;
+    white-space: normal !important;
+  }
+
+  .el-button-group {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)) !important;
+  }
+
+  .el-button-group .el-button {
+    min-width: 0 !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  .el-space,
+  .el-space__item {
+    width: 100% !important;
+  }
+
+  .el-input__wrapper,
+  .el-select__wrapper,
+  .el-date-editor.el-input__wrapper,
+  .el-input-number .el-input__wrapper {
+    min-height: 44px !important;
+  }
+
+  .el-form-item {
+    margin-bottom: 14px !important;
+  }
+
+  .el-form-item__label {
+    width: auto !important;
+    justify-content: flex-start !important;
+    line-height: 1.35 !important;
+    margin-bottom: 4px !important;
+    text-align: left !important;
+  }
+
+  .el-card,
+  .card,
+  .metric-card,
+  .chart-card,
+  .table-card,
+  .box-card,
+  .product-table-card,
+  .list-panel,
+  .detail-panel,
+  .queue,
+  .detail {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-radius: var(--radius-lg) !important;
+  }
+
+  .el-card__header,
+  .el-card__body {
+    padding: 10px !important;
+  }
+
+  .el-table {
+    width: 100% !important;
+    min-width: 720px;
+    font-size: 12px !important;
+  }
+
+  .el-table__header-wrapper,
+  .el-table__body-wrapper,
+  .el-table__inner-wrapper,
+  .el-table__body,
+  .table-scroll,
+  .table-scroll-wrapper,
+  .detail-table,
+  .detail-table-wrap,
+  .form-scroll-wrapper,
+  .prompt-editor {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .el-table .cell {
+    padding-inline: 6px !important;
+    line-height: 1.35 !important;
+  }
+
+  .el-pagination {
+    width: 100%;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    white-space: normal !important;
+  }
+
+  .el-dialog {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+    max-height: calc(100dvh - 16px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .el-dialog__body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px !important;
+  }
+
+  .el-tabs__header {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .el-tabs__nav {
+    flex-wrap: nowrap !important;
+  }
+
+  .el-tabs__item {
+    height: 44px !important;
+    line-height: 44px !important;
+    flex-shrink: 0 !important;
+    padding-inline: 12px !important;
+  }
+
+  .el-descriptions__body,
+  .el-descriptions__table {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+  }
+
+  .settings-form,
+  .editor-form {
+    min-width: min(600px, calc(100vw - 32px)) !important;
+  }
+
+  .el-form--inline {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .el-form--inline .el-form-item {
+    display: block !important;
+    width: 100% !important;
+    margin-right: 0 !important;
+  }
+
+  .el-form--inline .el-form-item__content,
+  .el-form-item__content {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .el-radio-button,
+  .el-radio-button__inner {
+    width: 100% !important;
+  }
+}
+
 @media (min-width: 769px) {
   .show-on-mobile {
     display: none !important;
@@ -86,6 +357,11 @@
   
   .stat-value {
     font-size: var(--font-size-xl);
+  }
+
+  .el-table__fixed,
+  .el-table__fixed-right {
+    box-shadow: none !important;
   }
 }
 

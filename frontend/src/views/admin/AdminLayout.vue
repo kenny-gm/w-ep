@@ -94,6 +94,8 @@ watch(() => route.path, (path) => {
 @media (max-width: 767px) {
   .admin-layout {
     min-height: auto;
+    width: 100%;
+    overflow-x: hidden;
   }
   
   :deep(.el-tabs__header) {
@@ -131,6 +133,18 @@ watch(() => route.path, (path) => {
   :deep(.el-tabs--border-card > .el-tabs__header .el-tabs__item) {
     height: 44px;
     line-height: 44px;
+  }
+}
+
+@media (max-width: 430px) {
+  :deep(.el-tabs__content) {
+    padding: 8px;
+  }
+
+  :deep(.el-tabs__item) {
+    max-width: 156px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 

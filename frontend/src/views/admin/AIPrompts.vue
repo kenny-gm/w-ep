@@ -393,4 +393,60 @@ onMounted(() => {
   font-size: 14px;
   width: 100%;
 }
+
+@media (max-width: 430px) {
+  .ai-prompts {
+    padding: 8px;
+  }
+
+  .prompt-layout {
+    flex-direction: column;
+    gap: 12px;
+    min-height: auto;
+  }
+
+  .template-list {
+    width: 100%;
+  }
+
+  .template-list .el-menu {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .template-list :deep(.el-menu-item) {
+    min-width: 160px;
+    height: 44px;
+    line-height: 44px;
+    flex-shrink: 0;
+  }
+
+  .prompt-editor {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .editor-form {
+    min-width: 560px;
+  }
+
+  .version-item {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .version-date {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .field-hint,
+  .field-error {
+    display: block;
+    margin: 6px 0 0;
+  }
+}
 </style>

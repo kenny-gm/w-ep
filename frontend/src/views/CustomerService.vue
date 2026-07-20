@@ -2150,6 +2150,99 @@ function getReturnSlaClass(item) {
   .quick-filter-tag { width: 100%; }
 }
 
+@media (max-width: 430px) {
+  .customer-service-page {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-actions :deep(.el-button) {
+    width: 100%;
+  }
+
+  .channel-cards {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 2px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .channel-cards::-webkit-scrollbar { display: none; }
+
+  .channel-card {
+    min-width: 260px;
+    scroll-snap-align: start;
+  }
+
+  .channel-card-items,
+  .channel-card-items-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters,
+  .filters.has-quick-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-refresh {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .workspace {
+    gap: 10px;
+  }
+
+  .queue {
+    padding: 6px;
+  }
+
+  .queue-item {
+    padding: 10px;
+  }
+
+  .queue-card-top,
+  .queue-card-footer,
+  .message-meta,
+  .internal-note-head,
+  .reply-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .queue-card-time,
+  .queue-card-footer span {
+    white-space: normal;
+  }
+
+  .detail {
+    padding: 12px;
+  }
+
+  .message {
+    max-width: 100%;
+  }
+
+  .return-photo-thumb {
+    width: 64px;
+    height: 64px;
+  }
+
+  .reply-actions :deep(.el-button),
+  .return-actions :deep(.el-button) {
+    width: 100%;
+  }
+}
+
 @media (min-width: 981px) {
   .mobile-back { display: none; }
 }

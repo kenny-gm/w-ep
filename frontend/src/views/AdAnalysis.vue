@@ -1546,4 +1546,59 @@ watch(selectedShop, (newShopId) => {
   }
   .metrics-grid .pie-card { min-width: 280px; }
 }
+
+@media (max-width: 430px) {
+  .ad-analysis {
+    padding: 8px;
+  }
+
+  .filter-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .filter-item {
+    width: 100%;
+  }
+
+  .metrics-grid .metric-card {
+    min-width: 176px;
+  }
+
+  .metrics-grid .pie-card {
+    min-width: 260px;
+  }
+
+  .product-info-bar {
+    align-items: flex-start;
+    padding: 10px;
+  }
+
+  .product-icon-wrap {
+    width: 30px;
+    height: 30px;
+  }
+
+  .product-sub-row {
+    gap: 6px 10px;
+  }
+
+  .donut-section {
+    gap: 8px;
+  }
+
+  .donut-svg-full {
+    width: 82px;
+    height: 82px;
+  }
+
+  .cpm-recommend-card :deep(.el-card__body),
+  .cpc-combined-card :deep(.el-card__body),
+  .cpm-combined-card :deep(.el-card__body) {
+    padding: 10px;
+    overflow-x: auto;
+  }
+}
 </style>
