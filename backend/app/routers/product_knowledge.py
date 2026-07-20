@@ -36,6 +36,59 @@ def _json_dumps(value) -> str:
     return json.dumps(value or [], ensure_ascii=False)
 
 
+def _format_characteristic(row: Dict[str, Any]) -> str:
+    name = str(row.get("name") or row.get("charcName") or "").strip()
+    value = row.get("value")
+    if isinstance(value, list):
+        value = ", ".join(str(v) for v in value if str(v).strip())
+    value = str(value or "").strip()
+    if name and value:
+        return f"- {name}: {value}"
+    if name:
+        return f"- {name}"
+    if value:
+        return f"- {value}"
+    return ""
+
+
+def _wb_basic_info_from_products(products: List[Product]) -> str:
+    """Format WB card facts as the product basic-info block."""
+    rows = [product for product in products if product]
+    if not rows:
+        return ""
+
+    lines: List[str] = []
+    for title, attr in [
+        ("WB标题", "wb_title"),
+        ("品牌", "wb_brand"),
+        ("类目", "wb_subject_name"),
+        ("WB描述", "wb_description"),
+    ]:
+        value = next((str(getattr(product, attr, "")).strip() for product in rows if getattr(product, attr, None)), "")
+        if value:
+            lines.append(f"{title}: {value}")
+
+    characteristic_lines: List[str] = []
+    for product in rows:
+        characteristics = _json_loads(getattr(product, "wb_characteristics_json", None), [])
+        for row in characteristics:
+            if len(characteristic_lines) >= 20:
+                break
+            if isinstance(row, dict):
+                line = _format_characteristic(row)
+                if line and line not in characteristic_lines:
+                    characteristic_lines.append(line)
+        if len(characteristic_lines) >= 20:
+            break
+    if characteristic_lines:
+        lines.append("参数/属性:")
+        lines.extend(characteristic_lines)
+
+    if not lines:
+        return ""
+    return "WB产品卡字段（来自WB Content API，不含图片）:\n" + "\n".join(lines)
+
+
 def _product_name(product: Product) -> str:
     return (product.custom_name or product.name or product.sku or "").strip()
 
@@ -171,6 +224,10 @@ def sync_profiles_from_products(db: Session, user: User) -> int:
             if getattr(profile, field) != value:
                 setattr(profile, field, value)
                 touched = True
+        wb_basic_info = _wb_basic_info_from_products(rows)
+        if wb_basic_info and not (profile.basic_info or "").strip():
+            profile.basic_info = wb_basic_info
+            touched = True
         if touched:
             profile.updated_at = _now()
             changed += 1
@@ -317,8 +374,16 @@ def build_product_knowledge_context(db: Session, item: CustomerServiceItem) -> D
         return {"context": "未命中产品知识库。禁止编造具体产品功能、尺寸、材质、故障处理或售后承诺。", "sources": []}
 
     faq = _json_loads(profile.faq_json, [])
+    product = _product_for_item(db, item)
+    wb_basic_info = _wb_basic_info_from_products([product] if product else [])
+    basic_parts = []
+    if wb_basic_info and "WB产品卡字段" not in (profile.basic_info or ""):
+        basic_parts.append(wb_basic_info)
+    if profile.basic_info and profile.basic_info.strip():
+        basic_parts.append(profile.basic_info.strip())
+    basic_info = "\n".join(basic_parts)
     sections = [
-        ("基础信息", profile.basic_info),
+        ("基础信息", basic_info),
         ("功能卖点", profile.features),
         ("使用方法", profile.usage_guide),
         ("故障处理", profile.troubleshooting),
@@ -328,32 +393,6 @@ def build_product_knowledge_context(db: Session, item: CustomerServiceItem) -> D
     for title, value in sections:
         if value and value.strip():
             lines.append(f"{title}: {value.strip()}")
-
-    product = _product_for_item(db, item)
-    if product:
-        wb_lines = []
-        for title, value in [
-            ("标题", getattr(product, "wb_title", None)),
-            ("品牌", getattr(product, "wb_brand", None)),
-            ("类目", getattr(product, "wb_subject_name", None)),
-            ("描述", getattr(product, "wb_description", None)),
-        ]:
-            if value and str(value).strip():
-                wb_lines.append(f"{title}: {str(value).strip()}")
-        characteristics = _json_loads(getattr(product, "wb_characteristics_json", None), [])
-        if characteristics:
-            wb_lines.append("参数/属性:")
-            for row in characteristics[:20]:
-                name = str(row.get("name") or row.get("charcName") or "").strip()
-                value = row.get("value")
-                if isinstance(value, list):
-                    value = ", ".join(str(v) for v in value if str(v).strip())
-                value = str(value or "").strip()
-                if name or value:
-                    wb_lines.append(f"- {name}: {value}")
-        if wb_lines:
-            lines.append("WB商品卡事实（来自WB Content API，不含图片）:")
-            lines.extend(wb_lines)
 
     if faq:
         lines.append("FAQ:")

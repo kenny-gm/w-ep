@@ -85,11 +85,21 @@
           <el-tabs v-model="activeTab" class="knowledge-tabs">
             <el-tab-pane label="基础" name="basic">
               <el-form label-position="top">
-                <el-form-item label="基础信息">
-                  <el-input v-model="form.basic_info" type="textarea" :rows="6" />
+                <el-form-item label="基础信息（WB产品卡字段）">
+                  <el-input
+                    v-model="form.basic_info"
+                    type="textarea"
+                    :rows="8"
+                    placeholder="系统会从 WB 商品卡自动同步标题、品牌、类目、描述、参数/属性；这里主要用于校对产品基础事实。功能卖点和补充说明请写到下方。"
+                  />
                 </el-form-item>
                 <el-form-item label="功能卖点">
-                  <el-input v-model="form.features" type="textarea" :rows="6" />
+                  <el-input
+                    v-model="form.features"
+                    type="textarea"
+                    :rows="6"
+                    placeholder="由产品负责人补充 WB 商品卡没有覆盖的功能卖点、能力边界、适用场景差异和买家关注点。"
+                  />
                 </el-form-item>
               </el-form>
             </el-tab-pane>
