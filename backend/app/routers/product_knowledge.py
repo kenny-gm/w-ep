@@ -129,14 +129,19 @@ def _translate_basic_info_to_zh(db: Session, basic_info: str) -> str:
 
 def _try_translate_basic_info_to_zh(db: Session, profile: ProductKnowledge) -> bool:
     """Auto-generate Chinese basics without breaking normal page loads."""
-    if not (profile.basic_info or "").strip():
+    source_hash = _basic_info_hash(profile.basic_info)
+    if not source_hash:
         profile.basic_info_zh = ""
+        profile.basic_info_zh_source_hash = ""
+        return False
+    if (profile.basic_info_zh or "").strip() and profile.basic_info_zh_source_hash == source_hash:
         return False
     try:
         translated = _translate_basic_info_to_zh(db, profile.basic_info or "").strip()
         if not translated:
             return False
         profile.basic_info_zh = translated
+        profile.basic_info_zh_source_hash = source_hash
         return True
     except HTTPException as exc:
         logger.warning(
@@ -165,9 +170,19 @@ def _sync_profile_basic_info(
         if current_basic != wb_basic_info:
             profile.basic_info = wb_basic_info
             profile.basic_info_zh = ""
+            profile.basic_info_zh_source_hash = ""
             changed = True
 
-    if auto_translate and (profile.basic_info or "").strip() and not (profile.basic_info_zh or "").strip():
+    source_hash = _basic_info_hash(profile.basic_info)
+    if (profile.basic_info_zh or "").strip() and source_hash and not (profile.basic_info_zh_source_hash or "").strip():
+        profile.basic_info_zh_source_hash = source_hash
+        changed = True
+
+    needs_translation = source_hash and (
+        not (profile.basic_info_zh or "").strip()
+        or (profile.basic_info_zh_source_hash or "") != source_hash
+    )
+    if auto_translate and needs_translation:
         if _try_translate_basic_info_to_zh(db, profile):
             changed = True
 
@@ -181,6 +196,13 @@ def _product_name(product: Product) -> str:
 def _product_key(product_name: str) -> str:
     normalized = " ".join((product_name or "").strip().lower().split())
     return hashlib.sha1(normalized.encode("utf-8")).hexdigest()
+
+
+def _basic_info_hash(basic_info: str | None) -> str:
+    normalized = "\n".join(line.rstrip() for line in (basic_info or "").strip().splitlines())
+    if not normalized:
+        return ""
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def _product_for_item(db: Session, item: CustomerServiceItem) -> Optional[Product]:
@@ -255,6 +277,7 @@ def _profile_to_dict(profile: ProductKnowledge) -> Dict[str, Any]:
         "shop_names": _json_loads(profile.shop_names_json, []),
         "basic_info": profile.basic_info or "",
         "basic_info_zh": profile.basic_info_zh or "",
+        "basic_info_zh_source_hash": profile.basic_info_zh_source_hash or "",
         "features": profile.features or "",
         "usage_guide": profile.usage_guide or "",
         "troubleshooting": profile.troubleshooting or "",
@@ -446,6 +469,7 @@ def translate_basic_info(
         if wb_basic_info:
             profile.basic_info = wb_basic_info
     profile.basic_info_zh = _translate_basic_info_to_zh(db, profile.basic_info or "")
+    profile.basic_info_zh_source_hash = _basic_info_hash(profile.basic_info)
     profile.updated_by = current_user.id
     profile.updated_at = _now()
     db.commit()

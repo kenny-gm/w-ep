@@ -144,6 +144,7 @@ class ProductKnowledge(Base):
 
     basic_info = Column(Text, default="")
     basic_info_zh = Column(Text, default="")
+    basic_info_zh_source_hash = Column(String(64), default="")
     features = Column(Text, default="")
     usage_guide = Column(Text, default="")
     troubleshooting = Column(Text, default="")
