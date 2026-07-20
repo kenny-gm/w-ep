@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -18,6 +19,7 @@ from app.services.ai_client import AIClient, AIClientDisabled, AIClientError
 
 
 router = APIRouter(prefix="/api/product-knowledge", tags=["产品知识库"])
+logger = logging.getLogger(__name__)
 
 
 def _now() -> datetime:
@@ -109,6 +111,49 @@ def _translate_basic_info_to_zh(db: Session, basic_info: str) -> str:
         raise HTTPException(status_code=400, detail=str(exc))
     except AIClientError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+def _try_translate_basic_info_to_zh(db: Session, profile: ProductKnowledge) -> bool:
+    """Auto-generate Chinese basics without breaking normal page loads."""
+    if not (profile.basic_info or "").strip():
+        profile.basic_info_zh = ""
+        return False
+    try:
+        profile.basic_info_zh = _translate_basic_info_to_zh(db, profile.basic_info or "")
+        return True
+    except HTTPException as exc:
+        logger.warning(
+            "product knowledge basic info auto-translation skipped: profile_id=%s detail=%s",
+            profile.id,
+            exc.detail,
+        )
+        return False
+
+
+def _sync_profile_basic_info(
+    db: Session,
+    profile: ProductKnowledge,
+    products: Optional[List[Product]] = None,
+) -> bool:
+    linked_ids = _json_loads(profile.linked_product_ids_json, [])
+    rows = products
+    if rows is None:
+        rows = db.query(Product).filter(Product.id.in_(linked_ids)).all() if linked_ids else []
+
+    changed = False
+    wb_basic_info = _wb_basic_info_from_products(rows or [])
+    if wb_basic_info:
+        current_basic = (profile.basic_info or "").strip()
+        if current_basic != wb_basic_info:
+            profile.basic_info = wb_basic_info
+            profile.basic_info_zh = ""
+            changed = True
+
+    if (profile.basic_info or "").strip() and not (profile.basic_info_zh or "").strip():
+        if _try_translate_basic_info_to_zh(db, profile):
+            changed = True
+
+    return changed
 
 
 def _product_name(product: Product) -> str:
@@ -248,9 +293,7 @@ def sync_profiles_from_products(db: Session, user: User) -> int:
             if getattr(profile, field) != value:
                 setattr(profile, field, value)
                 touched = True
-        wb_basic_info = _wb_basic_info_from_products(rows)
-        if wb_basic_info and not (profile.basic_info or "").strip():
-            profile.basic_info = wb_basic_info
+        if _sync_profile_basic_info(db, profile, rows):
             touched = True
         if touched:
             profile.updated_at = _now()
@@ -329,6 +372,10 @@ def get_product_knowledge(
     if owners and current_user.role != UserRole.ADMIN:
         if not (set(owners) & set(_json_loads(profile.owners_json, []))):
             raise HTTPException(status_code=403, detail="无权访问该产品知识库")
+    if _sync_profile_basic_info(db, profile):
+        profile.updated_at = _now()
+        db.commit()
+        db.refresh(profile)
     return _profile_to_dict(profile)
 
 

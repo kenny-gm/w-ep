@@ -95,17 +95,12 @@
                   />
                 </el-form-item>
                 <el-form-item label="中文基础信息整理（由系统基于 WB 基础信息翻译，只读）">
-                  <div class="form-item-actions">
-                    <el-button size="small" :loading="translatingBasicInfo" @click="translateBasicInfo">
-                      生成/更新中文整理
-                    </el-button>
-                  </div>
                   <el-input
                     v-model="form.basic_info_zh"
                     type="textarea"
                     :rows="8"
                     readonly
-                    placeholder="点击生成后，系统会基于上方 WB 俄语基础信息翻译整理成中文，供负责人阅读。该内容不作为客服 AI 草稿的产品事实来源。"
+                    placeholder="系统会基于上方 WB 俄语基础信息自动翻译整理成中文，供负责人阅读。该内容不作为客服 AI 草稿的产品事实来源。"
                   />
                 </el-form-item>
                 <el-form-item label="功能卖点">
@@ -190,7 +185,6 @@ const active = ref(null)
 const loading = ref(false)
 const saving = ref(false)
 const refreshing = ref(false)
-const translatingBasicInfo = ref(false)
 const activeTab = ref('basic')
 const filters = reactive({ search: '', status: 'active' })
 
@@ -307,22 +301,6 @@ async function saveActive() {
   }
 }
 
-async function translateBasicInfo() {
-  if (!form.id) return
-  translatingBasicInfo.value = true
-  try {
-    const res = await axios.post(`/api/product-knowledge/${form.id}/translate-basic-info`)
-    active.value = res.data.item
-    fillForm(res.data.item)
-    ElMessage.success('中文基础信息已生成')
-    await fetchKnowledge()
-  } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || '生成中文基础信息失败')
-  } finally {
-    translatingBasicInfo.value = false
-  }
-}
-
 onMounted(fetchKnowledge)
 </script>
 
@@ -423,12 +401,6 @@ onMounted(fetchKnowledge)
 
 .knowledge-tabs {
   margin-top: 12px;
-}
-
-.form-item-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
 }
 
 .faq-toolbar {
