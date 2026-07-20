@@ -85,12 +85,27 @@
           <el-tabs v-model="activeTab" class="knowledge-tabs">
             <el-tab-pane label="基础" name="basic">
               <el-form label-position="top">
-                <el-form-item label="基础信息（WB产品卡字段）">
+                <el-form-item label="基础信息（WB产品卡字段，只读）">
                   <el-input
                     v-model="form.basic_info"
                     type="textarea"
                     :rows="8"
-                    placeholder="系统会从 WB 商品卡自动同步标题、品牌、类目、描述、参数/属性；这里主要用于校对产品基础事实。功能卖点和补充说明请写到下方。"
+                    readonly
+                    placeholder="系统从 WB Content API 自动同步标题、品牌、类目、描述、参数/属性；该区域不可手工编辑。"
+                  />
+                </el-form-item>
+                <el-form-item label="中文基础信息整理（由系统基于 WB 基础信息翻译，只读）">
+                  <div class="form-item-actions">
+                    <el-button size="small" :loading="translatingBasicInfo" @click="translateBasicInfo">
+                      生成/更新中文整理
+                    </el-button>
+                  </div>
+                  <el-input
+                    v-model="form.basic_info_zh"
+                    type="textarea"
+                    :rows="8"
+                    readonly
+                    placeholder="点击生成后，系统会基于上方 WB 俄语基础信息翻译整理成中文，供负责人阅读。该内容不作为客服 AI 草稿的产品事实来源。"
                   />
                 </el-form-item>
                 <el-form-item label="功能卖点">
@@ -175,6 +190,7 @@ const active = ref(null)
 const loading = ref(false)
 const saving = ref(false)
 const refreshing = ref(false)
+const translatingBasicInfo = ref(false)
 const activeTab = ref('basic')
 const filters = reactive({ search: '', status: 'active' })
 
@@ -187,6 +203,7 @@ const form = reactive({
   owners: [],
   shop_names: [],
   basic_info: '',
+  basic_info_zh: '',
   features: '',
   usage_guide: '',
   troubleshooting: '',
@@ -269,7 +286,6 @@ async function saveActive() {
   saving.value = true
   try {
     const payload = {
-      basic_info: form.basic_info,
       features: form.features,
       usage_guide: form.usage_guide,
       troubleshooting: form.troubleshooting,
@@ -288,6 +304,22 @@ async function saveActive() {
     ElMessage.error(error?.response?.data?.detail || '保存失败')
   } finally {
     saving.value = false
+  }
+}
+
+async function translateBasicInfo() {
+  if (!form.id) return
+  translatingBasicInfo.value = true
+  try {
+    const res = await axios.post(`/api/product-knowledge/${form.id}/translate-basic-info`)
+    active.value = res.data.item
+    fillForm(res.data.item)
+    ElMessage.success('中文基础信息已生成')
+    await fetchKnowledge()
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || '生成中文基础信息失败')
+  } finally {
+    translatingBasicInfo.value = false
   }
 }
 
@@ -391,6 +423,12 @@ onMounted(fetchKnowledge)
 
 .knowledge-tabs {
   margin-top: 12px;
+}
+
+.form-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 
 .faq-toolbar {

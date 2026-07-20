@@ -82,6 +82,10 @@ migrate_expand_customer_service_reply_sign()  # 幂等，重复执行无影响
 from migrations.add_product_knowledge import migrate_add_product_knowledge
 migrate_add_product_knowledge()  # 幂等，重复执行无影响
 
+# 迁移：产品知识库中文基础信息整理字段。
+from migrations.add_product_knowledge_basic_info_zh import migrate_add_product_knowledge_basic_info_zh
+migrate_add_product_knowledge_basic_info_zh()  # 幂等，重复执行无影响
+
 # 迁移：products 保存 WB 商品卡文本字段（不保存图片）。
 from migrations.add_product_wb_card_fields import migrate_add_product_wb_card_fields
 migrate_add_product_wb_card_fields()  # 幂等，重复执行无影响

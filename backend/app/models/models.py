@@ -143,6 +143,7 @@ class ProductKnowledge(Base):
     shop_names_json = Column(Text, default="[]")
 
     basic_info = Column(Text, default="")
+    basic_info_zh = Column(Text, default="")
     features = Column(Text, default="")
     usage_guide = Column(Text, default="")
     troubleshooting = Column(Text, default="")

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import CustomerServiceItem, Product, ProductKnowledge, User, UserRole
 from app.routers.auth import get_current_user
+from app.services.ai_client import AIClient, AIClientDisabled, AIClientError
 
 
 router = APIRouter(prefix="/api/product-knowledge", tags=["产品知识库"])
@@ -89,6 +90,27 @@ def _wb_basic_info_from_products(products: List[Product]) -> str:
     return "WB产品卡字段（来自WB Content API，不含图片）:\n" + "\n".join(lines)
 
 
+def _translate_basic_info_to_zh(db: Session, basic_info: str) -> str:
+    source = (basic_info or "").strip()
+    if not source:
+        raise HTTPException(status_code=400, detail="没有可翻译的 WB 基础信息")
+    system_prompt = (
+        "你是跨境电商产品资料翻译助手。只做事实翻译和结构化整理，"
+        "不要添加原文没有的信息，不要写营销夸张语，不要写客服回复话术。"
+    )
+    user_prompt = (
+        "请把下面 WB 商品卡基础信息翻译并整理成中文，保留标题、品牌、类目、描述、参数/属性结构。"
+        "输出纯中文文本，不要输出 JSON，不要解释。\n\n"
+        f"{source}"
+    )
+    try:
+        return AIClient(db).chat_text(system_prompt, user_prompt, temperature=0.1, max_tokens=1400).strip()
+    except AIClientDisabled as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except AIClientError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 def _product_name(product: Product) -> str:
     return (product.custom_name or product.name or product.sku or "").strip()
 
@@ -147,6 +169,7 @@ def _can_edit(profile: ProductKnowledge, user: User) -> bool:
 def _profile_to_dict(profile: ProductKnowledge) -> Dict[str, Any]:
     fields = [
         profile.basic_info,
+        profile.basic_info_zh,
         profile.features,
         profile.usage_guide,
         profile.troubleshooting,
@@ -156,7 +179,7 @@ def _profile_to_dict(profile: ProductKnowledge) -> Dict[str, Any]:
     completed = sum(1 for value in fields if (value or "").strip())
     if faq:
         completed += 1
-    completeness = round(completed / 6 * 100)
+    completeness = round(completed / 7 * 100)
     return {
         "id": profile.id,
         "product_key": profile.product_key,
@@ -168,6 +191,7 @@ def _profile_to_dict(profile: ProductKnowledge) -> Dict[str, Any]:
         "owners": _json_loads(profile.owners_json, []),
         "shop_names": _json_loads(profile.shop_names_json, []),
         "basic_info": profile.basic_info or "",
+        "basic_info_zh": profile.basic_info_zh or "",
         "features": profile.features or "",
         "usage_guide": profile.usage_guide or "",
         "troubleshooting": profile.troubleshooting or "",
@@ -239,7 +263,6 @@ def sync_profiles_from_products(db: Session, user: User) -> int:
 
 
 class KnowledgePayload(BaseModel):
-    basic_info: Optional[str] = None
     features: Optional[str] = None
     usage_guide: Optional[str] = None
     troubleshooting: Optional[str] = None
@@ -328,6 +351,31 @@ def update_product_knowledge(
             profile.faq_json = _json_dumps(value)
         elif hasattr(profile, field):
             setattr(profile, field, value)
+    profile.updated_by = current_user.id
+    profile.updated_at = _now()
+    db.commit()
+    db.refresh(profile)
+    return {"success": True, "item": _profile_to_dict(profile)}
+
+
+@router.post("/{profile_id}/translate-basic-info")
+def translate_basic_info(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    profile = db.query(ProductKnowledge).filter(ProductKnowledge.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="产品知识库不存在")
+    if not _can_edit(profile, current_user):
+        raise HTTPException(status_code=403, detail="无权更新该产品知识库")
+    if not (profile.basic_info or "").strip():
+        linked_ids = _json_loads(profile.linked_product_ids_json, [])
+        products = db.query(Product).filter(Product.id.in_(linked_ids)).all() if linked_ids else []
+        wb_basic_info = _wb_basic_info_from_products(products)
+        if wb_basic_info:
+            profile.basic_info = wb_basic_info
+    profile.basic_info_zh = _translate_basic_info_to_zh(db, profile.basic_info or "")
     profile.updated_by = current_user.id
     profile.updated_at = _now()
     db.commit()
