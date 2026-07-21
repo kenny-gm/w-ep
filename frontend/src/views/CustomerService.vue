@@ -450,10 +450,10 @@
             <el-button v-if="hasCSperm('customer_service:ai_draft')" :loading="drafting" @click="generateDraft">生成俄语草稿</el-button>
             <span>AI 只生成草稿，发送前必须人工确认。</span>
           </div>
-          <div v-if="draftKnowledgeSources.length" class="knowledge-source-line">
+          <div v-if="activeDraftKnowledgeSources.length" class="knowledge-source-line">
             <span>AI已引用产品知识库：</span>
             <el-tag
-              v-for="source in draftKnowledgeSources"
+              v-for="source in activeDraftKnowledgeSources"
               :key="source.id"
               size="small"
               type="success"
@@ -497,6 +497,7 @@ const loading = ref(false)
 const syncing = ref(false)
 const drafting = ref(false)
 const draftKnowledgeSources = ref([])
+const draftKnowledgeItemId = ref(null)
 const sending = ref(false)
 const answeringReturn = ref(false)
 const rejectingQuestion = ref(false)
@@ -525,6 +526,10 @@ const filters = reactive({
 })
 
 const canManage = computed(() => ['admin', 'manager'].includes(authStore.user?.role))
+const activeDraftKnowledgeSources = computed(() => {
+  if (!activeItem.value || draftKnowledgeItemId.value !== activeItem.value.id) return []
+  return draftKnowledgeSources.value
+})
 
 // 客服细粒度权限 helpers
 // 后端 get_user_permissions 规则：
@@ -801,6 +806,8 @@ async function selectItem(item) {
   returnActions.value = []
   replyText.value = ''
   noteText.value = ''
+  draftKnowledgeSources.value = []
+  draftKnowledgeItemId.value = null
 
   const seq = ++detailRequestSeq.value
   const res = await axios.get(`/api/customer-service/items/${item.id}`)
@@ -884,14 +891,18 @@ async function pollSyncStatus(logId, interval = 2000) {
 
 async function generateDraft() {
   if (!activeItem.value) return
+  const item = activeItem.value
+  const itemId = item.id
   drafting.value = true
   try {
-    const res = await axios.post(`/api/customer-service/items/${activeItem.value.id}/ai-draft`)
+    const res = await axios.post(`/api/customer-service/items/${itemId}/ai-draft`)
     const draft = res.data.draft || ''
-    draftKnowledgeSources.value = res.data.knowledge_sources || []
+    const knowledgeSources = res.data.knowledge_sources || []
+    await selectItem(item)
+    if (!activeItem.value || activeItem.value.id !== itemId) return
     replyText.value = draft
-    await selectItem(activeItem.value)
-    replyText.value = draft
+    draftKnowledgeSources.value = knowledgeSources
+    draftKnowledgeItemId.value = itemId
   } catch (err) {
     ElMessage.error(err?.response?.data?.detail || '生成草稿失败')
   } finally {
