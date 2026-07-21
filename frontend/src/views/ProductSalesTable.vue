@@ -756,17 +756,11 @@ async function prefetchLogsForDateRange() {
 .rate-danger {
   color: var(--color-danger) !important;
   font-weight: 700;
-  background: var(--color-danger-soft);
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
 }
 
 .rate-warning {
   color: var(--color-warning) !important;
   font-weight: 700;
-  background: var(--color-warning-soft);
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
 }
 
 .rate-success {
