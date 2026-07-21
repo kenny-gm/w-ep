@@ -12,17 +12,6 @@
           <span class="rate-hint">1 CNY = {{ settings.cny_to_rub }} RUB</span>
         </el-form-item>
         
-        <el-divider content-position="left">同步设置</el-divider>
-        
-        <el-form-item label="自动同步">
-          <el-switch v-model="settings.sync_enabled" />
-        </el-form-item>
-        
-        <el-form-item label="同步时间">
-          <el-input-number v-model="settings.sync_hour" :min="0" :max="23" controls-position="right" />
-          <span class="rate-hint">每天凌晨 {{ settings.sync_hour }}:00</span>
-        </el-form-item>
-        
         <el-divider />
         
         <el-form-item>
@@ -67,9 +56,7 @@ const systemInfo = reactive({
 })
 
 const settings = reactive({
-  cny_to_rub: 12.5,
-  sync_enabled: true,
-  sync_hour: 3
+  cny_to_rub: 12.5
 })
 
 const databaseDisplay = computed(() => {
@@ -89,12 +76,6 @@ async function fetchSettings() {
     
     if (response.data.cny_to_rub) {
       settings.cny_to_rub = parseFloat(response.data.cny_to_rub)
-    }
-    if (response.data.sync_enabled !== undefined) {
-      settings.sync_enabled = response.data.sync_enabled === 'true'
-    }
-    if (response.data.sync_hour) {
-      settings.sync_hour = parseInt(response.data.sync_hour)
     }
   } catch (error) {
     console.error('获取设置失败', error)
@@ -127,8 +108,6 @@ async function fetchSystemInfo() {
 async function saveSettings() {
   try {
     await axios.put('/api/admin/settings/cny_to_rub/', { value: settings.cny_to_rub.toString() })
-    await axios.put('/api/admin/settings/sync_enabled/', { value: settings.sync_enabled.toString() })
-    await axios.put('/api/admin/settings/sync_hour/', { value: settings.sync_hour.toString() })
     
     ElMessage.success('保存成功')
     // 保存后重新加载最新数据
