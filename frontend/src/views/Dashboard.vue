@@ -23,10 +23,10 @@
         </el-button-group>
       </div>
       <div class="filter-item date-filter">
-        <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" format="YYYY-MM-DD" value-format="YYYY-MM-DD" @change="handleDateChange" style="width: 240px" />
+        <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" format="YYYY-MM-DD" value-format="YYYY-MM-DD" @change="handleDateChange" />
       </div>
       <div class="filter-item owner-filter">
-        <el-select v-model="filters.owner" placeholder="全部负责人" clearable style="width: 120px">
+        <el-select v-model="filters.owner" placeholder="全部负责人" clearable>
           <el-option v-for="o in owners" :key="o" :label="o" :value="o" />
         </el-select>
       </div>
@@ -39,19 +39,12 @@
     </div>
 
     <section class="metric-matrix-section">
-      <div class="metric-matrix">
-        <div class="matrix-fixed-column">
-          <div class="matrix-fixed-cell matrix-metric-heading">指标</div>
-          <div v-for="card in metricCards" :key="card.key" class="matrix-fixed-cell matrix-metric-label">
-            <el-icon><component :is="card.icon" /></el-icon>
-            <span>{{ card.label }}</span>
-          </div>
-        </div>
-
-        <div class="matrix-scroll-pane">
-          <div class="matrix-scroll-content">
-            <div class="matrix-scroll-row matrix-header-row">
-              <div v-for="section in metricSections" :key="section.key" class="matrix-section-heading">
+      <div class="metric-table-scroll">
+        <table class="metric-matrix-table">
+          <thead>
+            <tr>
+              <th class="metric-sticky-cell metric-heading-cell">指标</th>
+              <th v-for="section in metricSections" :key="section.key" class="metric-section-cell">
                 <div class="matrix-section-title">{{ section.title }}</div>
                 <div class="matrix-section-subtitle">{{ section.subtitle }}</div>
                 <el-select
@@ -72,11 +65,16 @@
                     :value="shop.id"
                   />
                 </el-select>
-              </div>
-            </div>
-
-            <div v-for="card in metricCards" :key="card.key" class="matrix-scroll-row">
-              <div v-for="section in metricSections" :key="section.key + '-' + card.key" class="matrix-value-cell">
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="card in metricCards" :key="card.key">
+              <th class="metric-sticky-cell metric-label-cell">
+                <el-icon><component :is="card.icon" /></el-icon>
+                <span>{{ card.label }}</span>
+              </th>
+              <td v-for="section in metricSections" :key="section.key + '-' + card.key" class="metric-value-cell">
                 <div class="matrix-value-line">
                   <span class="matrix-value">{{ formatMetricValue(section, card) }}</span>
                   <span class="matrix-change" :class="getChangeClass(section.summary[card.changeKey], card.reverseChange)">
@@ -89,10 +87,10 @@
                     <polyline :points="getLinePoints(section.trend[card.trendKey], section.trend.max[card.trendKey])" fill="none" :stroke="card.color" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
     <ProductSalesTable 
@@ -501,71 +499,68 @@ onMounted(async () => {
   margin: 0;
   max-width: 100%;
 }
-.metric-matrix {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  background: var(--surface-panel);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-
-.matrix-fixed-column {
-  position: relative;
-  z-index: 3;
-  background: var(--surface-muted);
-  border-right: 1px solid var(--border-subtle);
-  box-shadow: 8px 0 12px -12px rgba(15, 23, 42, 0.35);
-}
-
-.matrix-scroll-pane {
-  min-width: 0;
+.metric-table-scroll {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  touch-action: pan-x pan-y;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  background: var(--surface-panel);
 }
 
-.matrix-scroll-content {
-  min-width: 660px;
+.metric-matrix-table {
+  width: 100%;
+  min-width: 810px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  background: var(--surface-panel);
 }
 
-.matrix-fixed-cell,
-.matrix-scroll-row {
-  min-height: 58px;
+.metric-matrix-table th,
+.metric-matrix-table td {
   border-top: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+  vertical-align: top;
 }
 
-.matrix-fixed-cell:first-child,
-.matrix-scroll-row:first-child {
-  min-height: 112px;
+.metric-matrix-table thead th {
   border-top: 0;
+  background: var(--surface-muted);
 }
 
-.matrix-scroll-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(220px, 1fr));
+.metric-matrix-table th:last-child,
+.metric-matrix-table td:last-child {
+  border-right: 0;
 }
 
-.matrix-header-row { background: var(--surface-muted); }
+.metric-sticky-cell {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  width: 150px;
+  background: var(--surface-muted);
+  box-shadow: 8px 0 12px -12px rgba(15, 23, 42, 0.35);
+}
 
-.matrix-metric-heading {
-  display: flex;
-  align-items: center;
+.metric-heading-cell {
   padding: 14px 16px;
   font-size: 13px;
   font-weight: 750;
   color: var(--text-subtle);
+  text-align: left;
 }
 
-.matrix-section-heading {
-  min-width: 0;
+.metric-section-cell {
+  width: 220px;
+  min-width: 220px;
   padding: 12px 14px;
-  border-right: 1px solid var(--border-subtle);
+  text-align: left;
 }
-.matrix-section-heading:last-child { border-right: none; }
 .matrix-section-title {
   font-size: 14px;
   font-weight: 800;
@@ -579,7 +574,7 @@ onMounted(async () => {
 }
 .section-shop-filter { margin-top: 8px; width: 100%; }
 
-.matrix-metric-label {
+.metric-label-cell {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -588,14 +583,14 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-subtle);
+  text-align: left;
 }
 
-.matrix-value-cell {
+.metric-value-cell {
+  width: 220px;
+  min-width: 220px;
   padding: 12px 14px;
-  border-right: 1px solid var(--border-subtle);
-  min-width: 0;
 }
-.matrix-value-cell:last-child { border-right: none; }
 
 .matrix-value-line {
   display: flex;
@@ -836,14 +831,16 @@ onMounted(async () => {
 
 @media (max-width: 980px) {
   .filter-bar { grid-template-columns: 1fr; }
-  .metric-matrix {
-    grid-template-columns: 112px minmax(0, 1fr);
+  .metric-matrix-table {
+    min-width: 652px;
   }
-  .matrix-scroll-content {
-    min-width: 540px;
+  .metric-sticky-cell {
+    width: 112px;
   }
-  .matrix-scroll-row {
-    grid-template-columns: repeat(3, minmax(180px, 1fr));
+  .metric-section-cell,
+  .metric-value-cell {
+    width: 180px;
+    min-width: 180px;
   }
 }
 
@@ -851,6 +848,11 @@ onMounted(async () => {
   .filter-bar {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "quick quick"
+      "date date"
+      "owner query"
+      "product product";
     align-items: stretch;
     gap: 6px;
     padding: 8px;
@@ -863,16 +865,11 @@ onMounted(async () => {
     padding: 0 !important;
   }
 
-  .quick-filter,
-  .date-filter,
-  .product-filter,
-  .query-button {
-    grid-column: 1 / -1;
-  }
-
-  .owner-filter {
-    grid-column: 1;
-  }
+  .quick-filter { grid-area: quick; }
+  .date-filter { grid-area: date; }
+  .owner-filter { grid-area: owner; }
+  .product-filter { grid-area: product; }
+  .query-button { grid-area: query; }
 
   .filter-bar :deep(.el-button-group) {
     width: 100% !important;
@@ -906,23 +903,28 @@ onMounted(async () => {
     padding-inline: 8px !important;
   }
 
-  .metric-matrix {
+  .metric-table-scroll {
     margin-inline: -2px;
-    grid-template-columns: 92px minmax(0, 1fr);
   }
 
-  .matrix-scroll-content {
-    min-width: 600px;
+  .metric-matrix-table {
+    min-width: 692px;
   }
 
-  .matrix-scroll-row {
-    grid-template-columns: repeat(3, 200px);
+  .metric-sticky-cell {
+    width: 92px;
   }
 
-  .matrix-metric-heading,
-  .matrix-section-heading,
-  .matrix-metric-label,
-  .matrix-value-cell {
+  .metric-section-cell,
+  .metric-value-cell {
+    width: 200px;
+    min-width: 200px;
+  }
+
+  .metric-heading-cell,
+  .metric-section-cell,
+  .metric-label-cell,
+  .metric-value-cell {
     padding: 10px;
   }
 
@@ -930,8 +932,7 @@ onMounted(async () => {
     font-size: 15px;
   }
 
-  .matrix-metric-heading,
-  .matrix-metric-label {
+  .metric-sticky-cell {
     box-shadow: 8px 0 12px -12px rgba(15, 23, 42, 0.35);
   }
 
