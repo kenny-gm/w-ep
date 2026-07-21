@@ -84,8 +84,10 @@
           <tbody>
             <tr v-for="card in metricCards" :key="card.key">
               <th class="metric-sticky-cell metric-label-cell">
-                <el-icon><component :is="card.icon" /></el-icon>
-                <span>{{ card.label }}</span>
+                <div class="metric-label-content">
+                  <el-icon><component :is="card.icon" /></el-icon>
+                  <span>{{ card.label }}</span>
+                </div>
               </th>
               <td v-for="section in metricSections" :key="section.key + '-' + card.key" class="metric-value-cell">
                 <div class="matrix-value-line">
@@ -616,15 +618,18 @@ onMounted(async () => {
 .section-shop-filter { margin-top: 8px; width: 100%; }
 
 .metric-label-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   padding: 14px 16px;
   background: var(--surface-muted);
   font-size: 13px;
   font-weight: 700;
   color: var(--text-subtle);
   text-align: left;
+}
+
+.metric-label-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .metric-value-cell {
@@ -975,6 +980,10 @@ onMounted(async () => {
   .metric-label-cell,
   .metric-value-cell {
     padding: 10px;
+  }
+
+  .metric-label-content {
+    gap: 6px;
   }
 
   .matrix-value {
