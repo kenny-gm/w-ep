@@ -458,7 +458,7 @@ onMounted(async () => {
 
 .filter-bar {
   display: grid;
-  grid-template-columns: auto auto auto minmax(220px, 1fr) auto;
+  grid-template-columns: auto 260px 160px minmax(260px, 1fr) auto;
   gap: 8px;
   align-items: center;
   padding: 10px;
@@ -471,6 +471,9 @@ onMounted(async () => {
 
 .filter-item { display: flex; align-items: center; }
 .filter-item.flex-1 { flex: 1; min-width: 0; }
+.date-filter { width: 260px; }
+.owner-filter { width: 160px; }
+.product-filter { min-width: 260px; }
 
 .filter-bar :deep(.el-select),
 .filter-bar :deep(.el-date-editor),
@@ -847,6 +850,12 @@ onMounted(async () => {
 
 @media (max-width: 980px) {
   .filter-bar { grid-template-columns: 1fr; }
+  .date-filter,
+  .owner-filter,
+  .product-filter {
+    width: 100%;
+    min-width: 0;
+  }
   .metric-matrix-table {
     min-width: 652px;
   }
