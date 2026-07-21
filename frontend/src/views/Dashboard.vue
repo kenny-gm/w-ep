@@ -30,6 +30,19 @@
           <el-option v-for="o in owners" :key="o" :label="o" :value="o" />
         </el-select>
       </div>
+      <div class="filter-item shop-filter">
+        <el-select
+          v-model="filters.shopIds"
+          placeholder="全部店铺"
+          clearable
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          filterable
+        >
+          <el-option v-for="shop in shops" :key="shop.id" :label="shop.name" :value="shop.id" />
+        </el-select>
+      </div>
       <div class="filter-item product-filter flex-1">
         <el-select v-model="filters.productId" placeholder="全部产品" clearable filterable style="width: 100%">
           <el-option v-for="p in uniqueProducts" :key="p" :label="p" :value="p" />
@@ -94,11 +107,11 @@
       </div>
     </section>
     <ProductSalesTable 
-      :items="productList"
+      :items="filteredProductList"
       :loading="loading"
       :start-date="filters.start_date" 
       :end-date="filters.end_date" 
-      :selected-shops="[]"
+      :selected-shops="filters.shopIds"
       :selected-owner="filters.owner"
       :selected-product="filters.productId"
       :quick-type="quickType" 
@@ -123,7 +136,7 @@ const owners = ref([])
 const logCounts = ref({})
 const quickType = ref('yesterday')
 
-const filters = reactive({ dateRange: null, start_date: '', end_date: '', productId: null, owner: null })
+const filters = reactive({ dateRange: null, start_date: '', end_date: '', productId: null, owner: null, shopIds: [] })
 const pagination = reactive({ page: 1, pageSize: 50 })
 const expandedRows = ref([])
 const logDialogVisible = ref(false)
@@ -136,6 +149,11 @@ const thresholds = reactive({ cart_rate: null, conversion_rate: null, ad_ratio: 
 const hasDateRange = computed(() => { if (!filters.start_date || !filters.end_date) return false; const days = Math.ceil((new Date(filters.end_date) - new Date(filters.start_date)) / 86400000) + 1; return days > 1; })
 const displayProducts = computed(() => { const start = (pagination.page - 1) * pagination.pageSize; return productList.value.slice(start, start + pagination.pageSize) })
 const uniqueProducts = computed(() => { const names = new Set(); products.value.forEach(p => { const name = p.custom_name || p.name; if (name) names.add(name); }); return Array.from(names).sort(); })
+const filteredProductList = computed(() => {
+  if (!filters.shopIds.length) return productList.value
+  const shopIdSet = new Set(filters.shopIds.map(id => String(id)))
+  return productList.value.filter(item => shopIdSet.has(String(item.shop_id)))
+})
 
 function createSummary() {
   return { total_sales: 0, total_visitors: 0, total_cart: 0, total_orders: 0, total_ad_cost: 0, avg_cart_rate: 0, avg_conversion_rate: 0, avg_ad_ratio: 0, sales_change: 0, visitors_change: 0, cart_change: 0, orders_change: 0, ad_cost_change: 0, cart_rate_change: 0, avg_conversion_rate_change: 0, ad_ratio_change: 0 }
@@ -458,7 +476,7 @@ onMounted(async () => {
 
 .filter-bar {
   display: grid;
-  grid-template-columns: auto 260px 160px minmax(260px, 1fr) auto;
+  grid-template-columns: auto 240px 150px 180px 190px auto;
   gap: 8px;
   align-items: center;
   padding: 10px;
@@ -471,9 +489,13 @@ onMounted(async () => {
 
 .filter-item { display: flex; align-items: center; }
 .filter-item.flex-1 { flex: 1; min-width: 0; }
-.date-filter { width: 260px; }
-.owner-filter { width: 160px; }
-.product-filter { min-width: 260px; }
+.date-filter { width: 240px; }
+.owner-filter { width: 150px; }
+.shop-filter { width: 180px; }
+.product-filter {
+  width: 190px;
+  min-width: 190px;
+}
 
 .filter-bar :deep(.el-select),
 .filter-bar :deep(.el-date-editor),
@@ -852,6 +874,7 @@ onMounted(async () => {
   .filter-bar { grid-template-columns: 1fr; }
   .date-filter,
   .owner-filter,
+  .shop-filter,
   .product-filter {
     width: 100%;
     min-width: 0;
@@ -876,8 +899,8 @@ onMounted(async () => {
     grid-template-areas:
       "quick quick"
       "date date"
-      "owner query"
-      "product product";
+      "owner shop"
+      "product query";
     align-items: stretch;
     gap: 6px;
     padding: 8px;
@@ -893,6 +916,7 @@ onMounted(async () => {
   .quick-filter { grid-area: quick; }
   .date-filter { grid-area: date; }
   .owner-filter { grid-area: owner; }
+  .shop-filter { grid-area: shop; }
   .product-filter { grid-area: product; }
   .query-button { grid-area: query; }
 
