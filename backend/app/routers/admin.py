@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
 
-from app.database import get_db
+from app.config import settings as app_settings
+from app.database import engine, get_db
 from app.models.models import User, Product, UserRole, Shop, SystemSetting, ProductPermission, UISetting, MenuItem
 from app.routers.auth import get_current_admin, get_current_user, get_password_hash
 
@@ -587,6 +588,33 @@ class SettingUpdate(BaseModel):
     value: str
 
 
+@router.get("/system-info/")
+def get_system_info(
+    current_user = Depends(get_current_admin)
+):
+    """获取系统运行信息，不返回密钥或数据库密码。"""
+    url = engine.url
+    dialect = engine.dialect.name
+    database_label = {
+        "mysql": "MySQL",
+        "sqlite": "SQLite",
+        "postgresql": "PostgreSQL",
+    }.get(dialect, dialect)
+
+    return {
+        "system_name": app_settings.APP_NAME,
+        "version": app_settings.APP_VERSION,
+        "backend_framework": "FastAPI",
+        "frontend_framework": "Vue 3 + Element Plus",
+        "database": database_label,
+        "database_dialect": dialect,
+        "database_host": url.host or "local",
+        "database_name": url.database,
+        "deployment": "Docker",
+        "app_env": app_settings.APP_ENV,
+    }
+
+
 @router.get("/settings/")
 def list_settings(
     db: Session = Depends(get_db),
@@ -640,4 +668,3 @@ def get_admin_stats(
         "shops_count": db.query(Shop).filter(Shop.is_active == True).count(),
         "products_count": db.query(ProductPermission).count()
     }
-
