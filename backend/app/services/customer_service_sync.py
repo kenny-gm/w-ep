@@ -793,6 +793,16 @@ class CustomerServiceSyncService:
         created_at_external: Optional[datetime],
         raw: Dict[str, Any],
     ) -> None:
+        if item.channel != "chat" and self._raw_is_chat_event(raw):
+            logger.warning(
+                "skip cross-channel WB chat message: shop_id=%s item_id=%s item_channel=%s item_external_id=%s event_id=%s",
+                item.shop_id,
+                item.id,
+                item.channel,
+                item.external_id,
+                raw.get("eventID") or raw.get("eventId") or raw.get("messageId") or raw.get("id"),
+            )
+            return
         if not external_message_id:
             external_message_id = f"{item.external_id}:{direction}:{created_at_external or self._now()}"
         # 生成去重键：shop_id:channel:external_message_id
@@ -830,6 +840,16 @@ class CustomerServiceSyncService:
                 existing.attachments_json = self._json(attachments)
                 existing.raw_json = self._json(raw)
                 return
+
+    @staticmethod
+    def _raw_is_chat_event(raw: Dict[str, Any]) -> bool:
+        if not isinstance(raw, dict):
+            return False
+        if raw.get("chatID") or raw.get("chatId") or raw.get("dialogId") or raw.get("replySign") or raw.get("reply_sign"):
+            return True
+        if raw.get("eventType") == "message" and isinstance(raw.get("message"), dict):
+            return True
+        return False
 
     def _paged_feedbacks_api(self, fetcher) -> Iterable[Dict[str, Any]]:
         take = 100

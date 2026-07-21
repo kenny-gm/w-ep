@@ -549,7 +549,10 @@ def generate_ai_reply_draft(
         template = get_active_template(db, "customer_reply")
 
         # 补齐所有 Prompt 变量
-        messages = sorted(item.messages or [], key=lambda m: m.created_at_external or m.created_at)
+        messages = sorted(
+            _valid_item_messages(item),
+            key=lambda m: m.created_at_external or m.created_at,
+        )
         messages_text = "\n".join([
             f"{'客服' if m.direction == 'seller' else '买家'}: {m.message_text}"
             for m in messages[-10:]
@@ -1316,7 +1319,7 @@ def _serialize_item(
         "updated_at": _fmt(item.updated_at),
     }
     if include_messages:
-        messages = sorted(item.messages or [], key=lambda m: m.created_at_external or m.created_at)
+        messages = sorted(_valid_item_messages(item), key=lambda m: m.created_at_external or m.created_at)
         data["messages"] = [_serialize_message(m) for m in messages]
     if include_actions:
         actions = sorted(item.actions or [], key=lambda a: a.action_time, reverse=True)
@@ -1340,6 +1343,37 @@ def _serialize_message(message: CustomerServiceMessage) -> Dict[str, Any]:
         "created_at_external": _fmt(message.created_at_external),
         "created_at": _fmt(message.created_at),
     }
+
+
+def _valid_item_messages(item: CustomerServiceItem) -> List[CustomerServiceMessage]:
+    """Return messages that belong to the item's channel.
+
+    Older sync runs could attach WB chat events to feedback/question items.
+    Filter them out at read time so dirty historical rows do not appear in
+    detail views or enter AI reply prompts.
+    """
+    return [
+        message
+        for message in (item.messages or [])
+        if not _is_cross_channel_message(item, message)
+    ]
+
+
+def _is_cross_channel_message(item: CustomerServiceItem, message: CustomerServiceMessage) -> bool:
+    raw = _json_loads(message.raw_json, {})
+    if item.channel != "chat" and _raw_is_chat_event(raw):
+        return True
+    return False
+
+
+def _raw_is_chat_event(raw: Dict[str, Any]) -> bool:
+    if not isinstance(raw, dict):
+        return False
+    if raw.get("chatID") or raw.get("chatId") or raw.get("dialogId") or raw.get("replySign") or raw.get("reply_sign"):
+        return True
+    if raw.get("eventType") == "message" and isinstance(raw.get("message"), dict):
+        return True
+    return False
 
 
 def _serialize_action(action: CustomerServiceAction) -> Dict[str, Any]:
