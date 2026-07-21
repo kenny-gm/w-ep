@@ -422,8 +422,10 @@ onMounted(async () => {
   padding: 16px;
   background: var(--surface-page);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-height: 100%;
+  min-width: 0;
 }
 
 .data-info-bar {
@@ -464,6 +466,7 @@ onMounted(async () => {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  min-width: 0;
 }
 
 .filter-item { display: flex; align-items: center; }
@@ -498,6 +501,7 @@ onMounted(async () => {
 .metric-matrix-section {
   margin: 0;
   max-width: 100%;
+  min-width: 0;
 }
 .metric-table-scroll {
   width: 100%;
