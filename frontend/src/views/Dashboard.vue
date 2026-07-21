@@ -39,17 +39,6 @@
     </div>
 
     <section class="metric-matrix-section">
-      <div class="matrix-mobile-tabs">
-        <button
-          v-for="(section, index) in metricSections"
-          :key="section.key"
-          type="button"
-          :class="{ active: activeMetricSection === section.key }"
-          @click="scrollMetricSection(index, section.key)"
-        >
-          {{ section.title }}
-        </button>
-      </div>
       <div class="metric-matrix">
         <div class="matrix-fixed-column">
           <div class="matrix-fixed-cell matrix-metric-heading">指标</div>
@@ -59,7 +48,7 @@
           </div>
         </div>
 
-        <div ref="matrixScrollPane" class="matrix-scroll-pane" @scroll="handleMetricMatrixScroll">
+        <div class="matrix-scroll-pane">
           <div class="matrix-scroll-content">
             <div class="matrix-scroll-row matrix-header-row">
               <div v-for="section in metricSections" :key="section.key" class="matrix-section-heading">
@@ -142,8 +131,6 @@ const expandedRows = ref([])
 const logDialogVisible = ref(false)
 const selectedProduct = ref(null)
 const logList = ref([])
-const matrixScrollPane = ref(null)
-const activeMetricSection = ref('unified')
 
 const dataInfo = reactive({ data_updated_at: '', data_staleness: '', exchange_rate: null })
 const thresholds = reactive({ cart_rate: null, conversion_rate: null, ad_ratio: null })
@@ -410,21 +397,6 @@ function getChangeClass(value, reverse = false) {
   return reverse ? (positive ? 'negative' : 'positive') : (positive ? 'positive' : 'negative')
 }
 function getRateClass(rate, metric) { const t = thresholds[metric]; if (!t || !rate) return ''; return rate <= t.danger_threshold ? 'rate-danger' : rate <= t.warning_threshold ? 'rate-warning' : 'rate-success' }
-function scrollMetricSection(index, key) {
-  activeMetricSection.value = key
-  const pane = matrixScrollPane.value
-  if (!pane) return
-  const sectionWidth = pane.scrollWidth / metricSections.length
-  pane.scrollTo({ left: sectionWidth * index, behavior: 'smooth' })
-}
-function handleMetricMatrixScroll(event) {
-  const pane = event.target
-  if (!pane || pane.scrollWidth <= pane.clientWidth) return
-  const maxLeft = pane.scrollWidth - pane.clientWidth
-  const ratio = maxLeft > 0 ? pane.scrollLeft / maxLeft : 0
-  const index = Math.min(metricSections.length - 1, Math.round(ratio * (metricSections.length - 1)))
-  activeMetricSection.value = metricSections[index]?.key || 'unified'
-}
 
 // initialized 防止 setQuickDate 触发 watch 与 onMounted 手动调用重复请求
 const initialized = ref(false)
@@ -529,11 +501,6 @@ onMounted(async () => {
   margin: 0;
   max-width: 100%;
 }
-
-.matrix-mobile-tabs {
-  display: none;
-}
-
 .metric-matrix {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);
@@ -937,31 +904,6 @@ onMounted(async () => {
   .filter-bar :deep(.el-date-editor.el-input__wrapper) {
     min-height: 34px !important;
     padding-inline: 8px !important;
-  }
-
-  .matrix-mobile-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    margin-bottom: 6px;
-  }
-
-  .matrix-mobile-tabs button {
-    min-width: 0;
-    min-height: 34px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--surface-panel);
-    color: var(--text-subtle);
-    font-size: 12px;
-    font-weight: 800;
-    padding: 0 6px;
-  }
-
-  .matrix-mobile-tabs button.active {
-    border-color: var(--color-brand);
-    background: var(--color-brand-soft);
-    color: var(--color-brand);
   }
 
   .metric-matrix {
