@@ -67,7 +67,7 @@
       :expand-row-keys="expandedKeys"
       @expand-change="handleExpandChange"
     >
-      <el-table-column type="expand" width="50">
+      <el-table-column type="expand" width="50" fixed="left">
         <template #default="props">
           <div v-if="expandedKeys.includes(props.row.keyword)" class="daily-detail">
             <div v-if="detailLoading" class="detail-loading">
@@ -115,7 +115,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="keyword" label="搜索词" min-width="200">
+      <el-table-column prop="keyword" label="搜索词" min-width="200" fixed="left">
         <template #default="props">
           <span class="keyword-text" :class="{ 'keyword-expanded': expandedKeys.includes(props.row.keyword) }">
             {{ props.row.keyword }}

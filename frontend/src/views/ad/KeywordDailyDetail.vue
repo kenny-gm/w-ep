@@ -41,7 +41,7 @@
     <div class="daily-table-card">
       <h3>每日明细</h3>
       <el-table :data="dailyData" stripe style="width: 100%">
-        <el-table-column prop="date" label="日期" min-width="110" />
+        <el-table-column prop="date" label="日期" min-width="110" fixed="left" />
         <el-table-column label="花费" align="right" min-width="100">
           <template #default="props">
             {{ formatNumber(props.row.spend) }} ₽

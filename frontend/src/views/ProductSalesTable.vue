@@ -30,13 +30,13 @@
           <tbody>
             <template v-for="row in visibleRows" :key="row.id">
               <tr :class="getRowClass(row)" @click="row._hasChildren && toggleRow(row)">
-                <td class="col-toggle">
+                <td class="col-toggle sticky-toggle">
                   <span v-if="row._hasChildren" :class="['toggle-icon', expandedIds.has(row.id) ? 'expanded' : '']" @click.stop="toggleRow(row)">
                     {{ expandedIds.has(row.id) ? '▼' : '▶' }}
                   </span>
                 </td>
-                <td :class="{ 'empty-cell': row.type !== 'top' }">{{ row.type === 'top' ? row.manager : '-' }}</td>
-                <td :class="{ 'empty-cell': row.type !== 'top' }">{{ row.type === 'top' ? row.product_name : '-' }}</td>
+                <td class="sticky-manager" :class="{ 'empty-cell': row.type !== 'top' }">{{ row.type === 'top' ? row.manager : '-' }}</td>
+                <td class="sticky-product" :class="{ 'empty-cell': row.type !== 'top' }">{{ row.type === 'top' ? row.product_name : '-' }}</td>
                 <td>
                   <span v-if="row.type === 'date'" :class="['log-icon', hasLogForDate(row)]" @click.stop="openLogDialog(row)">
                     <el-icon><Document /></el-icon>
@@ -654,6 +654,42 @@ async function prefetchLogsForDateRange() {
 .col-sku { width: 100px; }
 .col-log { width: 50px; text-align: center; }
 
+.tree-table th.col-toggle,
+.tree-table td.sticky-toggle,
+.tree-table th.col-manager,
+.tree-table td.sticky-manager,
+.tree-table th.col-product,
+.tree-table td.sticky-product {
+  position: sticky;
+  background: inherit;
+}
+
+.tree-table th.col-toggle,
+.tree-table td.sticky-toggle {
+  left: 0;
+  z-index: 21;
+}
+
+.tree-table th.col-manager,
+.tree-table td.sticky-manager {
+  left: 30px;
+  z-index: 21;
+}
+
+.tree-table th.col-product,
+.tree-table td.sticky-product {
+  left: 90px;
+  z-index: 21;
+  box-shadow: 8px 0 12px -12px rgba(15, 23, 42, 0.35);
+}
+
+.tree-table th.col-toggle,
+.tree-table th.col-manager,
+.tree-table th.col-product {
+  z-index: 31;
+  background: var(--surface-muted);
+}
+
 .tree-table td.num {
   text-align: right;
   font-family: var(--font-number);
@@ -840,6 +876,27 @@ async function prefetchLogsForDateRange() {
 
   .tree-table {
     min-width: 860px;
+  }
+
+  .col-toggle { width: 30px; }
+  .col-manager { width: 48px; }
+  .col-product { width: 108px; }
+
+  .tree-table th.col-manager,
+  .tree-table td.sticky-manager {
+    left: 30px;
+  }
+
+  .tree-table th.col-product,
+  .tree-table td.sticky-product {
+    left: 78px;
+  }
+
+  .tree-table td.sticky-manager,
+  .tree-table td.sticky-product {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.3;
   }
 
   .log-vertical-table table {

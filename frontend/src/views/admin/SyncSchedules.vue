@@ -21,8 +21,9 @@
       <el-button type="primary" :loading="initializing" @click="initializeSchedules">补齐默认计划</el-button>
     </div>
 
-    <el-table :data="filteredSchedules" v-loading="loading" stripe>
-      <el-table-column prop="shop_name" label="店铺" min-width="160" />
+    <div class="table-scroll-wrapper">
+    <el-table :data="filteredSchedules" v-loading="loading" stripe style="min-width: 1250px;">
+      <el-table-column prop="shop_name" label="店铺" min-width="160" fixed="left" />
       <el-table-column prop="platform" label="平台" width="120">
         <template #default="{ row }">
           <el-tag :type="row.platform === 'yandex' ? 'warning' : 'primary'">
@@ -79,6 +80,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
   </div>
 </template>
 
@@ -238,6 +240,12 @@ onMounted(fetchSchedules)
   color: #606266;
   font-size: 13px;
   min-width: 42px;
+}
+
+.table-scroll-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 768px) {

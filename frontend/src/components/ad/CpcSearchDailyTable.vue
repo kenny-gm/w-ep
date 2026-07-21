@@ -13,7 +13,7 @@
       style="width: 100%; min-width: 900px;"
       :fit="true"
     >
-      <el-table-column prop="date" label="日期" min-width="110" />
+      <el-table-column prop="date" label="日期" min-width="110" fixed="left" />
       <el-table-column label="曝光" align="right" min-width="90">
         <template #default="props">
           {{ formatNumber(props.row.impressions) }}

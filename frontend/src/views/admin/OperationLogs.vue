@@ -26,8 +26,9 @@
         </el-form-item>
       </el-form>
       
-      <el-table :data="logs" stripe v-loading="loading">
-        <el-table-column prop="date" label="日期" width="120" />
+      <div class="table-scroll-wrapper">
+      <el-table :data="logs" stripe v-loading="loading" style="min-width: 1230px;">
+        <el-table-column prop="date" label="日期" width="120" fixed="left" />
         <el-table-column prop="shop_name" label="店铺" width="120" />
         <el-table-column prop="product_name" label="产品" min-width="180" show-overflow-tooltip />
         <el-table-column prop="nm_id" label="NM_ID" width="110" />
@@ -51,6 +52,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </el-card>
     
     <el-dialog v-model="createDialogVisible" title="添加运营日志" width="500px">
@@ -331,6 +333,12 @@ onMounted(() => {
 
 .logs-container :deep(.el-table .el-table__cell) {
   padding: 8px 0;
+}
+
+.table-scroll-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 768px) {

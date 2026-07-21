@@ -33,8 +33,9 @@
     
     <!-- 产品列表 -->
     <el-card>
-      <el-table :data="products" v-loading="loading" stripe>
-        <el-table-column prop="nm_id" label="产品ID" width="100" />
+      <div class="table-scroll-wrapper">
+      <el-table :data="products" v-loading="loading" stripe style="min-width: 970px;">
+        <el-table-column prop="nm_id" label="产品ID" width="100" fixed="left" />
         <el-table-column prop="sku" label="SKU" width="150" />
         <el-table-column label="店铺" width="120">
           <template #default="{ row }">
@@ -64,6 +65,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
       
       <!-- 分页 -->
       <el-pagination
@@ -323,6 +325,12 @@ onMounted(() => {
   --el-table-border-color: #e2e8f0;
   --el-table-text-color: #334155;
   --el-table-header-text-color: #475569;
+}
+
+.table-scroll-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 对话框 */

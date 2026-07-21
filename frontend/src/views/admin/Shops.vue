@@ -7,7 +7,7 @@
 
       <div class="table-scroll-wrapper">
       <el-table :data="shops" v-loading="loading" stripe style="min-width: 1100px;">
-        <el-table-column prop="id" label="店铺ID" width="80" />
+        <el-table-column prop="id" label="店铺ID" width="80" fixed="left" />
         <el-table-column prop="name" label="店铺名称" width="180" />
         <el-table-column prop="currency" label="货币" width="80" />
         <el-table-column prop="platform" label="平台" width="100">

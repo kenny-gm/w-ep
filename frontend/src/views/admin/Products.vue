@@ -39,7 +39,7 @@
     <el-card>
       <div class="table-scroll-wrapper">
       <el-table :data="products" v-loading="loading" stripe style="min-width: 1100px;">
-        <el-table-column prop="nm_id" label="产品ID" width="100" />
+        <el-table-column prop="nm_id" label="产品ID" width="100" fixed="left" />
         <el-table-column prop="sku" label="SKU" width="150" />
         <el-table-column label="产品名称" min-width="200">
           <template #default="{ row }">

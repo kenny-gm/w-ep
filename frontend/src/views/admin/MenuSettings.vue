@@ -10,7 +10,7 @@
       
       <div class="table-scroll-wrapper">
         <el-table :data="menus" v-loading="loading" row-key="id" :tree-props="{ children: 'children' }" style="min-width: 900px;">
-        <el-table-column prop="name" label="菜单名称" min-width="150">
+        <el-table-column prop="name" label="菜单名称" min-width="150" fixed="left">
           <template #default="{ row }">
             <span>{{ row.icon }} {{ row.name }}</span>
           </template>

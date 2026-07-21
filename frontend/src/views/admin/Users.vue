@@ -10,7 +10,7 @@
       
       <div class="table-scroll-wrapper">
       <el-table :data="users" v-loading="loading" stripe style="min-width: 900px;">
-        <el-table-column prop="username" label="用户名" width="120" />
+        <el-table-column prop="username" label="用户名" width="120" fixed="left" />
         <el-table-column prop="role" label="角色" width="100">
           <template #default="{ row }">
             <el-tag :type="getRoleType(row.role)">

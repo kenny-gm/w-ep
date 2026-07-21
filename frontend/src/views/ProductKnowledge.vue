@@ -44,7 +44,7 @@
           highlight-current-row
           @row-click="openItem"
         >
-          <el-table-column prop="product_name" label="产品名称" min-width="180" />
+          <el-table-column prop="product_name" label="产品名称" min-width="180" fixed="left" />
           <el-table-column label="负责人" min-width="110">
             <template #default="{ row }">{{ row.owners.join(' / ') || '-' }}</template>
           </el-table-column>

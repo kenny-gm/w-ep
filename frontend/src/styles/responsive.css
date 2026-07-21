@@ -183,10 +183,6 @@
     font-size: 12px !important;
   }
 
-  .el-table__header-wrapper,
-  .el-table__body-wrapper,
-  .el-table__inner-wrapper,
-  .el-table__body,
   .table-scroll,
   .table-scroll-wrapper,
   .detail-table,
@@ -200,6 +196,40 @@
   .el-table .cell {
     padding-inline: 6px !important;
     line-height: 1.35 !important;
+  }
+
+  .table-scroll-wrapper,
+  .table-scroll,
+  .list-panel {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+  }
+
+  .el-table__fixed,
+  .el-table__fixed-right,
+  .el-table__fixed-left,
+  .el-table__fixed-right-patch,
+  .el-table-fixed-column--left,
+  .el-table-fixed-column--right {
+    display: revert !important;
+    visibility: visible !important;
+  }
+
+  .el-table-fixed-column--left,
+  .el-table-fixed-column--right {
+    z-index: 3 !important;
+    background: var(--surface-panel, #fff) !important;
+  }
+
+  .el-table-fixed-column--right {
+    box-shadow: -8px 0 12px -12px rgba(15, 23, 42, 0.35) !important;
+  }
+
+  .el-table-fixed-column--left {
+    box-shadow: 8px 0 12px -12px rgba(15, 23, 42, 0.35) !important;
   }
 
   .el-pagination {
@@ -361,7 +391,7 @@
 
   .el-table__fixed,
   .el-table__fixed-right {
-    box-shadow: none !important;
+    display: block !important;
   }
 }
 

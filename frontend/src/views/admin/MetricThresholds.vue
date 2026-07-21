@@ -14,7 +14,7 @@
 
       <div class="table-scroll-wrapper">
       <el-table :data="thresholds" v-loading="loading" stripe style="min-width: 1000px;">
-        <el-table-column label="指标名称" width="150">
+        <el-table-column label="指标名称" width="150" fixed="left">
           <template #default="{ row }">
             <el-select 
               v-model="row.metric_name" 
