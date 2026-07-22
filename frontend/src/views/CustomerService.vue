@@ -99,7 +99,7 @@
       </div>
     </div>
 
-    <div class="filters" :class="{ 'has-quick-filter': filters.quick_key }">
+    <div class="filters">
       <el-input
         class="filter-search"
         v-model="filters.search"
@@ -108,10 +108,20 @@
         @keyup.enter="reload"
         @clear="reload"
       />
-      <div v-if="filters.quick_key" class="quick-filter-tag">
-        <span>{{ quickKeyLabel }}</span>
-        <el-button size="small" circle @click="clearQuickKey" class="clear-quick-btn">✕</el-button>
-      </div>
+      <el-select
+        class="filter-select filter-quick"
+        v-model="filters.quick_key"
+        placeholder="快捷状态"
+        clearable
+        @change="handleQuickKeySelect"
+      >
+        <el-option
+          v-for="option in quickFilterOptions"
+          :key="option.value"
+          :label="option.label"
+          :value="option.value"
+        />
+      </el-select>
       <el-select class="filter-select filter-shop" v-model="filters.shop_id" placeholder="店铺" clearable @change="reload">
         <el-option v-for="shop in shops" :key="shop.id" :label="shop.name" :value="shop.id" />
       </el-select>
@@ -126,8 +136,9 @@
         <el-option label="退货申请" value="return_claim" />
       </el-select>
       <el-select class="filter-select filter-status" v-model="filters.status" placeholder="状态" @change="handleChannelStatusChange">
-        <el-option label="待回复" value="unanswered" />
+        <el-option label="未处理" value="open" />
         <el-option label="全部状态" value="all" />
+        <el-option label="待回复" value="unanswered" />
         <el-option label="已回复待买家" value="replied" />
         <el-option label="内部处理中" value="pending_internal" />
         <el-option label="已关闭" value="closed" />
@@ -629,7 +640,7 @@ const QUICK_FILTER_STATE = {
   chat_pending_internal: { channel: 'chat', status: 'pending_internal' },
 }
 
-const quickKeyLabel = computed(() => QUICK_KEY_MAP[filters.quick_key] || null)
+const quickFilterOptions = Object.entries(QUICK_KEY_MAP).map(([value, label]) => ({ value, label }))
 
 /**
  * 客服事项业务状态兜底计算。
@@ -705,30 +716,35 @@ function setQuickKey(key) {
   if (filters.quick_key === key) {
     clearQuickKey()
   } else {
-    filters.quick_key = key
-    // 清除可能干扰的固定筛选，只保留 quick_key 精确过滤
-    filters.shop_id = null
-    filters.owner = ''
-    filters.search = ''
-    const next = QUICK_FILTER_STATE[key]
-    if (next) {
-      filters.channel = next.channel
-      filters.status = next.status
-    }
-    activeItem.value = null
-    reload()
+    applyQuickKey(key)
   }
+}
+
+function applyQuickKey(key) {
+  filters.quick_key = key
+  const next = QUICK_FILTER_STATE[key]
+  if (next) {
+    filters.channel = next.channel
+    filters.status = next.status
+  }
+  activeItem.value = null
+  reload()
 }
 
 function clearQuickKey() {
   filters.quick_key = null
   filters.channel = 'all'
   filters.status = 'open'
-  filters.shop_id = null
-  filters.owner = ''
-  filters.search = ''
   activeItem.value = null
   reload()
+}
+
+function handleQuickKeySelect(key) {
+  if (key) {
+    applyQuickKey(key)
+  } else {
+    clearQuickKey()
+  }
 }
 
 async function handleChannelStatusChange() {
@@ -1357,44 +1373,11 @@ function getReturnSlaClass(item) {
 
 .channel-item-num.danger { color: var(--color-danger); }
 
-.quick-filter-tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  min-width: 0;
-  height: 32px;
-  padding: 0 8px 0 10px;
-  background: var(--color-info-soft);
-  border: 1px solid #bfdbfe;
-  border-radius: var(--radius-md);
-  font-size: 12px;
-  color: var(--color-info);
-  font-weight: 750;
-  white-space: nowrap;
-}
-
-.quick-filter-tag span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.clear-quick-btn {
-  width: 20px;
-  height: 20px;
-  min-height: 20px;
-  padding: 0;
-  line-height: 1;
-  color: var(--color-info);
-  border-color: #bfdbfe;
-  flex-shrink: 0;
-}
-
 .filters {
   display: grid;
   grid-template-columns:
-    minmax(240px, 1fr)
+    minmax(220px, 1fr)
+    160px
     190px
     116px
     112px
@@ -1409,17 +1392,6 @@ function getReturnSlaClass(item) {
   padding: 8px;
 }
 
-.filters.has-quick-filter {
-  grid-template-columns:
-    minmax(220px, 1fr)
-    minmax(120px, 180px)
-    190px
-    116px
-    112px
-    132px
-    72px;
-}
-
 .filters :deep(.el-select),
 .filters :deep(.el-input) {
   height: 32px;
@@ -1428,6 +1400,7 @@ function getReturnSlaClass(item) {
 
 .filter-search { min-width: 0; }
 .filter-select { width: 100%; }
+.filter-quick { min-width: 0; }
 .filter-refresh {
   min-width: 72px;
   height: 32px;
@@ -2123,8 +2096,7 @@ function getReturnSlaClass(item) {
   .filters {
     grid-template-columns: 1fr 1fr;
   }
-  .filter-search,
-  .quick-filter-tag {
+  .filter-search {
     grid-column: 1 / -1;
   }
   .workspace {
@@ -2158,7 +2130,6 @@ function getReturnSlaClass(item) {
   .detail-title-row h3 { font-size: 16px; }
   .queue-card-product-meta { grid-template-columns: 1fr; gap: 4px; }
   .queue-card-footer { flex-direction: column; gap: 4px; }
-  .quick-filter-tag { width: 100%; }
 }
 
 @media (max-width: 430px) {
@@ -2198,8 +2169,7 @@ function getReturnSlaClass(item) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .filters,
-  .filters.has-quick-filter {
+  .filters {
     grid-template-columns: 1fr;
   }
 
