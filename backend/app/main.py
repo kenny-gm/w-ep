@@ -98,6 +98,10 @@ migrate_add_product_wb_card_fields()  # 幂等，重复执行无影响
 from migrations.add_product_knowledge_to_customer_reply_prompt import migrate_add_product_knowledge_to_customer_reply_prompt
 migrate_add_product_knowledge_to_customer_reply_prompt()  # 幂等，重复执行无影响
 
+# 迁移：客服回复 Prompt 按渠道拆分，旧 customer_reply 保留为兜底。
+from migrations.add_channel_customer_reply_prompts import migrate_add_channel_customer_reply_prompts
+migrate_add_channel_customer_reply_prompts()  # 幂等，重复执行无影响
+
 # 导入路由
 from app.routers import auth, dashboard, products, shops, admin, users, inventory, orders, ads, customer_service, sync_schedules, product_knowledge
 from app.routers import metric_thresholds

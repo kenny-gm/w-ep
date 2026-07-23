@@ -50,6 +50,15 @@ from app.utils.permissions import _role as _cs_role, _user_allowed_owners, _user
 
 router = APIRouter(prefix="/api/customer-service", tags=["客服工作台"])
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+CUSTOMER_REPLY_FALLBACK_TEMPLATE_KEY = "customer_reply"
+CUSTOMER_REPLY_TEMPLATE_KEYS = {
+    "feedback": "customer_reply_feedback",
+    "question": "customer_reply_question",
+    "chat": "customer_reply_chat",
+    "return_claim": "customer_reply_return_claim",
+}
+AI_DRAFT_MIN_MAX_TOKENS = 1200
+AI_DRAFT_RETRY_MAX_TOKENS = 1800
 
 
 class ReplyRequest(BaseModel):
@@ -547,7 +556,7 @@ def generate_ai_reply_draft(
     item = _get_visible_item(db, item_id, current_user)
     knowledge = {"context": "未读取产品知识库。", "sources": []}
     try:
-        template = get_active_template(db, "customer_reply")
+        template_key, template = _get_customer_reply_template(db, item.channel)
 
         # 补齐所有 Prompt 变量
         messages = sorted(
@@ -590,12 +599,13 @@ def generate_ai_reply_draft(
                 "如果产品知识库未命中或信息不足，请生成保守草稿，并避免具体承诺。"
             )
         ai_client = AIClient(db)
+        max_tokens = max(int(template.max_tokens or 0), AI_DRAFT_MIN_MAX_TOKENS)
         try:
             output = ai_client.chat_json(
                 system_prompt,
                 user_prompt,
                 template.temperature,
-                template.max_tokens,
+                max_tokens,
             )
             draft = _extract_ai_reply_draft(output)
             if not draft:
@@ -603,7 +613,7 @@ def generate_ai_reply_draft(
                     system_prompt,
                     user_prompt,
                     template.temperature,
-                    template.max_tokens,
+                    max_tokens,
                 )
                 draft = _extract_ai_reply_draft(raw_output)
         except AIClientError as exc:
@@ -613,7 +623,15 @@ def generate_ai_reply_draft(
                 system_prompt,
                 user_prompt,
                 template.temperature,
-                template.max_tokens,
+                max_tokens,
+            )
+            draft = _extract_ai_reply_draft(raw_output)
+        if not draft and max_tokens < AI_DRAFT_RETRY_MAX_TOKENS:
+            raw_output = ai_client.chat_text(
+                system_prompt,
+                user_prompt,
+                template.temperature,
+                AI_DRAFT_RETRY_MAX_TOKENS,
             )
             draft = _extract_ai_reply_draft(raw_output)
         if not draft:
@@ -636,7 +654,7 @@ def generate_ai_reply_draft(
             item,
             current_user,
             "ai_draft_generated",
-            request={"channel": item.channel, "template": "customer_reply", "knowledge_sources": knowledge["sources"]},
+            request={"channel": item.channel, "template": template_key, "knowledge_sources": knowledge["sources"]},
             success=False,
             error=str(exc),
         )
@@ -648,7 +666,7 @@ def generate_ai_reply_draft(
         item,
         current_user,
         "ai_draft_generated",
-        request={"channel": item.channel, "template": "customer_reply", "knowledge_sources": knowledge["sources"]},
+        request={"channel": item.channel, "template": template_key, "knowledge_sources": knowledge["sources"]},
         response={"draft": draft, "knowledge_sources": knowledge["sources"]},
     )
     _touch_handled(item, current_user)
@@ -1562,6 +1580,20 @@ def _extract_ai_reply_draft(output: Any) -> str:
     if (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'")):
         raw = raw[1:-1].strip()
     return raw
+
+
+def _get_customer_reply_template(db: Session, channel: Optional[str]):
+    """按客服渠道选择 Prompt；渠道模板缺失时回退到旧的统一模板。"""
+    template_key = CUSTOMER_REPLY_TEMPLATE_KEYS.get(channel or "", CUSTOMER_REPLY_FALLBACK_TEMPLATE_KEY)
+    template = get_active_template(db, template_key)
+    if template:
+        return template_key, template
+
+    fallback = get_active_template(db, CUSTOMER_REPLY_FALLBACK_TEMPLATE_KEY)
+    if fallback:
+        return CUSTOMER_REPLY_FALLBACK_TEMPLATE_KEY, fallback
+
+    raise AIClientError("客服回复 Prompt 未配置")
 
 
 def _raw(item: CustomerServiceItem) -> Dict[str, Any]:

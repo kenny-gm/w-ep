@@ -8,7 +8,7 @@
 4. hash 缓存不重复调用 AI
 5. 翻译失败不影响原文
 6. 翻译动作写 CustomerServiceAction
-7. ai-draft 调用 customer_reply Prompt
+7. ai-draft 按渠道优先调用专用 Prompt，缺失时回退 customer_reply
 8. ai-draft 含中文被拦截
 9. ai-draft 动作写 CustomerServiceAction
 """
@@ -446,9 +446,9 @@ def test_translate_action_recorded():
 # 测试 10-12: ai-draft
 # ============================================================
 
-def test_ai_draft_calls_customer_reply_template():
-    """ai-draft 调用 customer_reply Prompt，不再调用固定模板"""
-    # 验证路由层 ai-draft 接口调用 get_active_template(db, "customer_reply")
+def test_ai_draft_calls_channel_reply_template():
+    """ai-draft 优先调用渠道 Prompt，不再只调用统一 customer_reply"""
+    # 验证路由层 ai-draft 接口调用 get_active_template(db, "customer_reply_feedback")
     captured = {}
 
     def fake_get_active_template(db, key):
@@ -494,8 +494,8 @@ def test_ai_draft_calls_customer_reply_template():
                     if "STOP" not in str(e):
                         raise
 
-    assert captured.get("key") == "customer_reply", \
-        f"期望 customer_reply，实际 {captured.get('key')}"
+    assert captured.get("key") == "customer_reply_feedback", \
+        f"期望 customer_reply_feedback，实际 {captured.get('key')}"
 
 
 def test_ai_draft_blocks_cjk():

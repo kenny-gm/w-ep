@@ -372,6 +372,72 @@ def test_ai_draft_falls_back_to_text_when_json_has_no_reply():
                                 mock_ai.chat_text.assert_called_once()
 
 
+def test_ai_draft_uses_minimum_output_tokens():
+    """ai-draft 至少使用 1200 输出 tokens，避免思考块耗尽 500 tokens。"""
+    with patch("app.routers.customer_service.get_active_template") as mock_get_tpl:
+        with patch("app.routers.customer_service.AIClient") as mock_ai_cls:
+            mock_tpl = MagicMock()
+            mock_tpl.system_prompt = "x"
+            mock_tpl.user_prompt_template = "{{content}}"
+            mock_tpl.temperature = 0.25
+            mock_tpl.max_tokens = 500
+            mock_get_tpl.return_value = mock_tpl
+
+            captured = {}
+            mock_ai = MagicMock()
+            mock_ai.chat_json.side_effect = lambda s, u, t, m: captured.update({"max_tokens": m}) or {"reply": "Здравствуйте! Спасибо за обращение."}
+            mock_ai_cls.return_value = mock_ai
+
+            with patch("app.routers.customer_service.require_cs_permission"):
+                with patch("app.routers.customer_service.build_product_knowledge_context",
+                           return_value={"context": "无", "sources": []}):
+                    with patch("app.routers.customer_service._get_visible_item", return_value=FakeItem()):
+                        with patch("app.routers.customer_service._record_action"):
+                            with patch("app.routers.customer_service._touch_handled"):
+                                from app.routers.customer_service import generate_ai_reply_draft
+
+                                result = generate_ai_reply_draft(
+                                    item_id=1,
+                                    db=FakeDB(),
+                                    current_user=MagicMock(),
+                                )
+                                assert result["success"] is True
+                                assert captured["max_tokens"] == 1200
+
+
+def test_ai_draft_retries_empty_text_with_more_tokens():
+    """chat_json/text 均为空时，再用 1800 tokens 重试一次。"""
+    with patch("app.routers.customer_service.get_active_template") as mock_get_tpl:
+        with patch("app.routers.customer_service.AIClient") as mock_ai_cls:
+            mock_tpl = MagicMock()
+            mock_tpl.system_prompt = "x"
+            mock_tpl.user_prompt_template = "{{content}}"
+            mock_tpl.temperature = 0.25
+            mock_tpl.max_tokens = 500
+            mock_get_tpl.return_value = mock_tpl
+
+            mock_ai = MagicMock()
+            mock_ai.chat_json.return_value = {"ok": True}
+            mock_ai.chat_text.side_effect = ["", "Здравствуйте! Спасибо за обращение."]
+            mock_ai_cls.return_value = mock_ai
+
+            with patch("app.routers.customer_service.require_cs_permission"):
+                with patch("app.routers.customer_service.build_product_knowledge_context",
+                           return_value={"context": "无", "sources": []}):
+                    with patch("app.routers.customer_service._get_visible_item", return_value=FakeItem()):
+                        with patch("app.routers.customer_service._record_action"):
+                            with patch("app.routers.customer_service._touch_handled"):
+                                from app.routers.customer_service import generate_ai_reply_draft
+
+                                result = generate_ai_reply_draft(
+                                    item_id=1,
+                                    db=FakeDB(),
+                                    current_user=MagicMock(),
+                                )
+                                assert result["success"] is True
+                                assert mock_ai.chat_text.call_args_list[-1].args[3] == 1800
+
+
 def test_ai_draft_passes_short_nmid():
     """nm_id 长度<4 时不拦截（避免误伤）"""
     short_item = FakeItem()
