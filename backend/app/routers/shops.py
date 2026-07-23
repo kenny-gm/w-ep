@@ -14,7 +14,7 @@ import app
 from fastapi import BackgroundTasks
 from app.routers.auth import get_current_user, get_current_admin
 from app.services.sync_fixed import SyncService
-from app.services.customer_service_sync import CustomerServiceSyncService
+from app.services.customer_service_sync import CUSTOMER_SERVICE_HISTORY_DAYS, CustomerServiceSyncService
 from app.services.sync_lock import SyncLockService
 from app.utils.timezone import format_shanghai_time
 
@@ -391,7 +391,7 @@ def _sync_shop_data_internal(
             # WB 店铺追加客服同步（失败不中断主流程）
             if shop.platform == "wildberries":
                 try:
-                    cs_result = CustomerServiceSyncService(db, shop).sync_all(days=30)
+                    cs_result = CustomerServiceSyncService(db, shop).sync_all(days=CUSTOMER_SERVICE_HISTORY_DAYS)
                     results["customer_service"] = cs_result
                 except Exception as e:
                     logger.warning(f"客服同步失败（不影响主同步）: {e}")
@@ -400,7 +400,7 @@ def _sync_shop_data_internal(
             if shop.platform != "wildberries":
                 results["customer_service"] = {"success": True, "message": "仅 WB 店铺支持客服同步"}
             else:
-                cs_result = CustomerServiceSyncService(db, shop).sync_all(days=30)
+                cs_result = CustomerServiceSyncService(db, shop).sync_all(days=CUSTOMER_SERVICE_HISTORY_DAYS)
                 results["customer_service"] = cs_result
     except Exception as e:
         logger.error(f"同步失败: {str(e)}", exc_info=True)
@@ -694,7 +694,7 @@ def run_sync_job_background(job_id: int, shop_id: int, sync_type: str, history: 
             if shop.platform == "wildberries":
                 from app.services.customer_service_sync import CustomerServiceSyncService
                 try:
-                    r_cs = CustomerServiceSyncService(db, shop).sync_all(days=30)
+                    r_cs = CustomerServiceSyncService(db, shop).sync_all(days=CUSTOMER_SERVICE_HISTORY_DAYS)
                 except Exception as e:
                     r_cs = {"success": False, "error": str(e)}
             else:
@@ -744,7 +744,7 @@ def run_sync_job_background(job_id: int, shop_id: int, sync_type: str, history: 
                 result = {"success": True, "message": "仅 WB 店铺支持客服同步"}
             else:
                 from app.services.customer_service_sync import CustomerServiceSyncService
-                result = CustomerServiceSyncService(db, shop).sync_all(days=30)
+                result = CustomerServiceSyncService(db, shop).sync_all(days=CUSTOMER_SERVICE_HISTORY_DAYS)
         else:
             raise Exception(f"未知的 sync_type: {sync_type}")
 
@@ -858,4 +858,3 @@ def get_latest_sync_job(
     if not job:
         raise HTTPException(status_code=404, detail="暂无同步记录")
     return job
-

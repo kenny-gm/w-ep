@@ -35,7 +35,7 @@ from app.routers.auth import get_current_user
 from app.routers.product_knowledge import build_product_knowledge_context
 from app.services.ai_client import AIClient, AIClientError
 from app.services.ai_prompt_service import get_active_template, render_template
-from app.services.customer_service_sync import CustomerServiceSyncService
+from app.services.customer_service_sync import CUSTOMER_SERVICE_HISTORY_DAYS, CustomerServiceSyncService
 from app.services.customer_translation_service import CustomerTranslationService
 from app.services.sync_lock import SyncLockService
 from app.services.wb_customer_client import WBCustomerAPIError, WBCustomerClient, WBCustomerRateLimit
@@ -79,7 +79,7 @@ class ReturnAnswerRequest(BaseModel):
 class SyncRequest(BaseModel):
     shop_id: Optional[int] = None
     channel: str = "all"  # all/questions/feedbacks/chats/return_claims
-    days: int = 30
+    days: int = CUSTOMER_SERVICE_HISTORY_DAYS
     force_full_sync: bool = False  # 强制从头同步（清除聊天 cursor）
 
 

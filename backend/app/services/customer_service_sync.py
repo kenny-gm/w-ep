@@ -31,6 +31,7 @@ from app.services.wb_customer_client import WBCustomerClient, WBCustomerRateLimi
 
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+CUSTOMER_SERVICE_HISTORY_DAYS = 180
 
 
 class CustomerServiceSyncService:
@@ -118,7 +119,7 @@ class CustomerServiceSyncService:
         if failures:
             raise RuntimeError(f"{context} 后客服数据完整性异常: " + "; ".join(failures))
 
-    def sync_all(self, days: int = 30) -> Dict[str, Any]:
+    def sync_all(self, days: int = CUSTOMER_SERVICE_HISTORY_DAYS) -> Dict[str, Any]:
         results = {
             "questions": self.sync_questions(days=days),
             "feedbacks": self.sync_feedbacks(days=days),
@@ -145,7 +146,7 @@ class CustomerServiceSyncService:
             "errors": errors,
         }
 
-    def sync_questions(self, days: int = 30) -> Dict[str, Any]:
+    def sync_questions(self, days: int = CUSTOMER_SERVICE_HISTORY_DAYS) -> Dict[str, Any]:
         sync_log = self._create_sync_log("customer_service_questions")
         try:
             integrity_before = self._integrity_snapshot()
@@ -177,7 +178,7 @@ class CustomerServiceSyncService:
             self._finish_sync_log(sync_log, False, 0, str(exc))
             return {"success": False, "error": str(exc)}
 
-    def sync_feedbacks(self, days: int = 30) -> Dict[str, Any]:
+    def sync_feedbacks(self, days: int = CUSTOMER_SERVICE_HISTORY_DAYS) -> Dict[str, Any]:
         sync_log = self._create_sync_log("customer_service_feedbacks")
         try:
             integrity_before = self._integrity_snapshot()
