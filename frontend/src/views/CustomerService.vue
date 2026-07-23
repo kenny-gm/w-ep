@@ -907,30 +907,43 @@ async function generateDraft() {
 
 async function translateItem() {
   if (!activeItem.value) return
+  const itemId = activeItem.value.id
   translatingItem.value = true
   try {
-    const res = await axios.post(`/api/customer-service/items/${activeItem.value.id}/translate`)
+    const res = await axios.post(`/api/customer-service/items/${itemId}/translate`)
     if (res.data.success) {
+      if (activeItem.value?.id === itemId && res.data.content_zh) {
+        activeItem.value.content_zh = res.data.content_zh
+      }
+      const listItem = items.value.find(item => item.id === itemId)
+      if (listItem && res.data.content_zh) {
+        listItem.content_zh = res.data.content_zh
+      }
       ElMessage.success(res.data.cached ? '已有翻译' : '翻译完成')
     } else {
       ElMessage.error(res.data.error || '翻译失败')
     }
-    await selectItem(activeItem.value)
   } finally {
     translatingItem.value = false
   }
 }
 
 async function translateMessage(message) {
+  const itemId = activeItem.value?.id
   translatingMessageId.value = message.id
   try {
     const res = await axios.post(`/api/customer-service/messages/${message.id}/translate`)
     if (res.data.success) {
+      if (activeItem.value?.id === itemId && res.data.message_text_zh) {
+        const currentMessage = activeItem.value.messages?.find(msg => msg.id === message.id)
+        if (currentMessage) {
+          currentMessage.message_text_zh = res.data.message_text_zh
+        }
+      }
       ElMessage.success(res.data.cached ? '已有翻译' : '翻译完成')
     } else {
       ElMessage.error(res.data.error || '翻译失败')
     }
-    await selectItem(activeItem.value)
   } finally {
     translatingMessageId.value = null
   }
