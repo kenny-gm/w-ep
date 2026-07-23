@@ -165,12 +165,56 @@ const form = reactive({
 const testVariables = ref('')
 const lastAutoFilledKey = ref('')
 
+const CUSTOMER_REPLY_TEST_VARIABLES = {
+  channel: 'feedback',
+  shop_name: 'Demo WB',
+  product_name: 'Air fryer 5L',
+  rating: 2,
+  status: 'open',
+  reply_status: 'unanswered',
+  is_archived: false,
+  is_return_related: false,
+  content: 'Товар пришел с повреждением, очень расстроена.',
+  content_zh: '商品到货有破损，买家很不满意。',
+  messages: '买家: Товар пришел с повреждением, очень расстроена.',
+  return_context: '',
+  existing_answer: '',
+  internal_note: '',
+  product_knowledge: '产品有 12 个月质保；如使用中仍有问题，可通过 Wildberries 客服或订单聊天联系卖家。',
+}
+
 const DEFAULT_VARIABLES = {
-  customer_reply: {
+  customer_reply_feedback: {
+    ...CUSTOMER_REPLY_TEST_VARIABLES,
     channel: 'feedback',
-    product_name: 'Air fryer 5L',
-    content: 'Товар пришел с повреждением, очень расстроена.',
-    content_zh: '商品到货有破损，买家很不满意。',
+  },
+  customer_reply_question: {
+    ...CUSTOMER_REPLY_TEST_VARIABLES,
+    channel: 'question',
+    rating: '',
+    content: 'Здравствуйте, есть ли гарантия на товар?',
+    content_zh: '您好，商品有质保吗？',
+    messages: '',
+    product_knowledge: '产品有 12 个月质保。',
+  },
+  customer_reply_chat: {
+    ...CUSTOMER_REPLY_TEST_VARIABLES,
+    channel: 'chat',
+    rating: '',
+    content: 'Здравствуйте, товар перестал работать. Что делать?',
+    content_zh: '您好，商品停止工作了，怎么办？',
+    messages: '买家: Здравствуйте, товар перестал работать. Что делать?',
+    product_knowledge: '产品有 12 个月质保；可通过 Wildberries 客服或订单聊天联系卖家。',
+  },
+  customer_reply_return_claim: {
+    ...CUSTOMER_REPLY_TEST_VARIABLES,
+    channel: 'return_claim',
+    rating: '',
+    status: 'open',
+    is_return_related: true,
+    content: 'Покупатель оформил заявку на возврат: товар не работает.',
+    content_zh: '买家提交退货申请：商品无法工作。',
+    return_context: '退货申请状态：待处理；原因：商品无法工作。',
   },
   translate_to_zh: {
     text: 'Товар пришел с повреждением, очень расстроена.',
@@ -188,8 +232,17 @@ const DEFAULT_VARIABLES = {
 
 function getDefaultVariables(key) {
   const vars = DEFAULT_VARIABLES[key]
-  if (!vars) return ''
-  return JSON.stringify(vars, null, 2)
+  return JSON.stringify(vars || {}, null, 2)
+}
+
+function parseTestVariables() {
+  const raw = testVariables.value.trim()
+  if (!raw) return {}
+  const parsed = JSON.parse(raw)
+  if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object') {
+    throw new Error('变量必须是 JSON 对象，例如 {"channel":"feedback"}')
+  }
+  return parsed
 }
 
 function formatDate(iso) {
@@ -309,7 +362,7 @@ function renderPrompt() {
   renderResult.value = null
   let vars = {}
   try {
-    vars = JSON.parse(testVariables.value)
+    vars = parseTestVariables()
   } catch (e) {
     variablesError.value = '变量 JSON 格式错误：' + e.message
     return
@@ -326,7 +379,7 @@ function testAI() {
   renderResult.value = null
   let vars = {}
   try {
-    vars = JSON.parse(testVariables.value)
+    vars = parseTestVariables()
   } catch (e) {
     variablesError.value = '变量 JSON 格式错误：' + e.message
     return

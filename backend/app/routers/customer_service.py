@@ -50,7 +50,6 @@ from app.utils.permissions import _role as _cs_role, _user_allowed_owners, _user
 
 router = APIRouter(prefix="/api/customer-service", tags=["客服工作台"])
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
-CUSTOMER_REPLY_FALLBACK_TEMPLATE_KEY = "customer_reply"
 CUSTOMER_REPLY_TEMPLATE_KEYS = {
     "feedback": "customer_reply_feedback",
     "question": "customer_reply_question",
@@ -1583,17 +1582,16 @@ def _extract_ai_reply_draft(output: Any) -> str:
 
 
 def _get_customer_reply_template(db: Session, channel: Optional[str]):
-    """按客服渠道选择 Prompt；渠道模板缺失时回退到旧的统一模板。"""
-    template_key = CUSTOMER_REPLY_TEMPLATE_KEYS.get(channel or "", CUSTOMER_REPLY_FALLBACK_TEMPLATE_KEY)
+    """按客服渠道选择 Prompt；缺少渠道模板时明确报配置错误。"""
+    template_key = CUSTOMER_REPLY_TEMPLATE_KEYS.get(channel or "")
+    if not template_key:
+        raise AIClientError(f"客服回复 Prompt 未配置：未知渠道 {channel or '-'}")
+
     template = get_active_template(db, template_key)
     if template:
         return template_key, template
 
-    fallback = get_active_template(db, CUSTOMER_REPLY_FALLBACK_TEMPLATE_KEY)
-    if fallback:
-        return CUSTOMER_REPLY_FALLBACK_TEMPLATE_KEY, fallback
-
-    raise AIClientError("客服回复 Prompt 未配置")
+    raise AIClientError(f"客服回复 Prompt 未配置：{template_key}")
 
 
 def _raw(item: CustomerServiceItem) -> Dict[str, Any]:
