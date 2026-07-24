@@ -1,5 +1,28 @@
 <template>
   <div class="customer-service-page">
+    <!-- P0-2 UI 修复：auto-pause 提示 banner，仅 enabled=false 且 paused_at 近 24h 内显示 -->
+    <el-alert
+      v-if="autoReplyAutoPaused"
+      type="error"
+      :closable="false"
+      show-icon
+      class="auto-reply-pause-banner"
+      :title="`AI 自动回复已于 ${formatPausedAt(autoReplySettings.paused_at)} 被系统自动暂停`"
+    >
+      <div class="auto-reply-pause-detail">
+        <span><strong>触发原因：</strong>连续失败阈值（连续 5 次失败）</span>
+        <span class="auto-reply-pause-error">
+          <strong>最近失败：</strong>
+          <code>{{ autoReplySettings.last_error || '(未知)' }}</code>
+        </span>
+        <el-button size="small" type="primary" plain @click="autoReplySettingsVisible = true">
+          检查设置
+        </el-button>
+        <el-button size="small" plain @click="openAutoReplyReport">
+          查看报告
+        </el-button>
+      </div>
+    </el-alert>
     <div class="toolbar">
       <div class="toolbar-title">
         <h2>客服工作台</h2>
@@ -658,6 +681,29 @@ const filters = reactive({
   status: 'open',
   quick_key: null
 })
+
+// P0-2 UI 修复：自动暂停 banner 判断（仅在 enabled=false 且 paused_at 近 24h 内显示，手动关闭不提示）
+const autoReplyAutoPaused = computed(() => {
+  if (autoReplySettings.enabled) return false
+  if (!autoReplySettings.paused_at) return false
+  const pausedAt = new Date(autoReplySettings.paused_at)
+  if (Number.isNaN(pausedAt.getTime())) return false
+  const ageHours = (Date.now() - pausedAt.getTime()) / (1000 * 60 * 60)
+  return ageHours < 24
+})
+
+function formatPausedAt(isoString) {
+  if (!isoString) return ''
+  const d = new Date(isoString)
+  if (Number.isNaN(d.getTime())) return ''
+  const diffMs = Date.now() - d.getTime()
+  const diffMin = Math.floor(diffMs / (60 * 1000))
+  if (diffMin < 1) return '刚刚'
+  if (diffMin < 60) return `${diffMin} 分钟前`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr} 小时前`
+  return d.toLocaleString('zh-CN')
+}
 
 const canManage = computed(() => ['admin', 'manager'].includes(authStore.user?.role))
 const activeDraftKnowledgeSources = computed(() => {
@@ -1474,6 +1520,36 @@ function getReturnSlaClass(item) {
 }
 
 .toolbar-actions { display: flex; gap: 8px; }
+
+/* P0-2 UI 修复：auto-pause banner 样式 */
+.auto-reply-pause-banner {
+  margin-bottom: 12px;
+}
+.auto-reply-pause-banner :deep(.el-alert__title) {
+  font-weight: 700;
+}
+.auto-reply-pause-detail {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-default, #606266);
+}
+.auto-reply-pause-error code {
+  display: inline-block;
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  padding: 2px 6px;
+  background: rgba(245, 108, 108, 0.08);
+  border-radius: 4px;
+  font-size: 12px;
+  color: #f56c6c;
+}
 
 .channel-cards {
   display: grid;
