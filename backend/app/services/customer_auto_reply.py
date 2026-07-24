@@ -56,6 +56,7 @@ DEFAULT_AUTO_REPLY_SETTINGS = {
     },
     "feedback_negative_daily_limit": 5,
     "consecutive_failures_pause": 5,
+    "consecutive_failures_window_minutes": 5,
 }
 
 
@@ -90,6 +91,11 @@ class CustomerAutoReplyService:
                 1,
                 50,
             ),
+            "consecutive_failures_window_minutes": _clamp_int(
+                payload.get("consecutive_failures_window_minutes", settings["consecutive_failures_window_minutes"]),
+                0,
+                120,
+            ),
         }
         _set_setting(self.db, "customer_ai_auto_reply_enabled", _bool_text(next_settings["enabled"]))
         _set_setting(self.db, "customer_ai_auto_reply_mode", next_settings["mode"])
@@ -108,6 +114,7 @@ class CustomerAutoReplyService:
             str(next_settings["feedback_negative_daily_limit"]),
         )
         _set_setting(self.db, "customer_ai_auto_reply_consecutive_failures_pause", str(next_settings["consecutive_failures_pause"]))
+        _set_setting(self.db, "customer_ai_auto_reply_consecutive_failures_window_minutes", str(next_settings["consecutive_failures_window_minutes"]))
         self.db.commit()
         return self.get_settings()
 
@@ -168,7 +175,7 @@ class CustomerAutoReplyService:
             run.status = "completed"
             run.finished_at = _now()
             run.message = "自动回复运行完成"
-            self._pause_on_failures(settings)
+            self._pause_on_failures(settings, run)
             self.db.commit()
             return run
         except Exception as exc:
@@ -466,11 +473,29 @@ class CustomerAutoReplyService:
             CustomerServiceItem.rating < 4,
         ).count()
 
-    def _pause_on_failures(self, settings: Dict[str, Any]) -> None:
+    def _pause_on_failures(self, settings: Dict[str, Any], run: Optional["CustomerAutoReplyRun"] = None) -> None:
+        """P1-3 修复：增加时间窗口，避免跨长周期的失败被误判为"连续失败"。
+
+        判定规则（向后兼容）：
+        - 默认行为：最近 N 条全部 failed 才触发 pause
+        - 加窗口：要求 N 条失败的时间跨度 ≤ window_minutes（默认 5，0 表示不启用窗口）
+        - 触发时把 run.message 标记为 "自动暂停..."，便于前端报告排查
+        """
         limit = settings["consecutive_failures_pause"]
+        window_minutes = settings.get("consecutive_failures_window_minutes", 0)
         recent = self.db.query(CustomerAutoReplyItem).order_by(CustomerAutoReplyItem.created_at.desc()).limit(limit).all()
-        if len(recent) == limit and all(row.decision == "failed" for row in recent):
-            _set_setting(self.db, "customer_ai_auto_reply_enabled", "false")
+        if len(recent) != limit or not all(row.decision == "failed" for row in recent):
+            return
+        if window_minutes > 0:
+            first_created = min(row.created_at for row in recent)
+            last_created = max(row.created_at for row in recent)
+            span_minutes = (last_created - first_created).total_seconds() / 60
+            if span_minutes > window_minutes:
+                return  # 跨时长过大，不算"连续失败"
+        if run is not None:
+            window_text = f"{window_minutes}min" if window_minutes > 0 else "无窗口"
+            run.message = f"自动暂停：连续 {limit} 次失败（{window_text}）"
+        _set_setting(self.db, "customer_ai_auto_reply_enabled", "false")
 
 
 def _get_auto_reply_settings(db: Session) -> Dict[str, Any]:
@@ -507,6 +532,12 @@ def _get_auto_reply_settings(db: Session) -> Dict[str, Any]:
             1,
             50,
             DEFAULT_AUTO_REPLY_SETTINGS["consecutive_failures_pause"],
+        ),
+        "consecutive_failures_window_minutes": _clamp_int(
+            values.get("customer_ai_auto_reply_consecutive_failures_window_minutes"),
+            0,
+            120,
+            DEFAULT_AUTO_REPLY_SETTINGS["consecutive_failures_window_minutes"],
         ),
     }
 

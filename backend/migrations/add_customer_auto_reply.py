@@ -27,6 +27,7 @@ DEFAULT_SETTINGS = {
     ),
     "customer_ai_auto_reply_feedback_negative_daily_limit": ("5", "AI 自动回复每店铺每日差评发送上限"),
     "customer_ai_auto_reply_consecutive_failures_pause": ("5", "连续失败达到该数量后自动关闭总开关"),
+    "customer_ai_auto_reply_consecutive_failures_window_minutes": ("5", "连续失败时间窗口（分钟），0 表示不启用（向后兼容）"),
 }
 
 
