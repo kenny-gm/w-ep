@@ -274,7 +274,8 @@ class CustomerAutoReplyService:
             block_reason = self._validate_draft(item, draft)
             if block_reason:
                 self._update_report_item(report_row, "blocked", draft, block_reason, template_key, template.version)
-                self._record_action(item, "auto_reply_blocked", {"auto_reply_key": auto_reply_key}, {"draft": draft}, False, block_reason)
+                # P3-3 修复：blocked 路径也传 first_response，便于 CS QA 看"AI 决策耗时"
+                self._record_action(item, "auto_reply_blocked", {"auto_reply_key": auto_reply_key}, {"draft": draft}, False, block_reason, item.first_replied_at is None)
                 return "blocked"
 
             if run.mode == "dry_run":
@@ -317,7 +318,8 @@ class CustomerAutoReplyService:
                 self._update_report_item(report_row, "failed", "", str(exc))
             else:
                 self._record_report_item(run, item, "failed", "", str(exc), auto_reply_key, latest_buyer_message_id)
-            self._record_action(item, "auto_reply_failed", {"auto_reply_key": auto_reply_key}, {}, False, str(exc))
+            # P3-3 修复：failed 路径也传 first_response，便于 CS QA 看"AI 失败耗时"
+            self._record_action(item, "auto_reply_failed", {"auto_reply_key": auto_reply_key}, {}, False, str(exc), item.first_replied_at is None)
             return "failed"
 
     def _generate_draft(self, item: CustomerServiceItem) -> Tuple[str, str, AIPromptTemplate, List[Dict[str, Any]]]:
@@ -473,9 +475,12 @@ class CustomerAutoReplyService:
         error: str,
         first_response: bool = False,
     ) -> None:
+        # P3-3 修复：response_minutes 总是计算（不依赖 first_response），
+        # 这样 blocked / failed 路径也能记录"AI 决策耗时" / "买家消息等了多久"
         response_minutes = None
-        if first_response and item.external_created_at:
+        if item.external_created_at:
             response_minutes = max(0, (_now() - item.external_created_at).total_seconds() / 60)
+        # 但 effective_response 仍仅 first_response=True 时计算（首响合规判定）
         self.db.add(CustomerServiceAction(
             item_id=item.id,
             user_id=None,
