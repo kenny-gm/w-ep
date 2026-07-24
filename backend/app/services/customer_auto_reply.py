@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from datetime import datetime, time
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -58,6 +59,7 @@ DEFAULT_AUTO_REPLY_SETTINGS = {
     "consecutive_failures_pause": 5,
     "consecutive_failures_window_minutes": 5,
     "scan_pool_multiplier": 50,
+    "send_pacing_seconds": 0.5,
 }
 
 
@@ -102,6 +104,11 @@ class CustomerAutoReplyService:
                 1,
                 200,
             ),
+            "send_pacing_seconds": _clamp_float(
+                payload.get("send_pacing_seconds", settings["send_pacing_seconds"]),
+                0.0,
+                30.0,
+            ),
         }
         _set_setting(self.db, "customer_ai_auto_reply_enabled", _bool_text(next_settings["enabled"]))
         _set_setting(self.db, "customer_ai_auto_reply_mode", next_settings["mode"])
@@ -122,6 +129,7 @@ class CustomerAutoReplyService:
         _set_setting(self.db, "customer_ai_auto_reply_consecutive_failures_pause", str(next_settings["consecutive_failures_pause"]))
         _set_setting(self.db, "customer_ai_auto_reply_consecutive_failures_window_minutes", str(next_settings["consecutive_failures_window_minutes"]))
         _set_setting(self.db, "customer_ai_auto_reply_scan_pool_multiplier", str(next_settings["scan_pool_multiplier"]))
+        _set_setting(self.db, "customer_ai_auto_reply_send_pacing_seconds", str(next_settings["send_pacing_seconds"]))
         self.db.commit()
         return self.get_settings()
 
@@ -182,6 +190,9 @@ class CustomerAutoReplyService:
                     self._record_report_item(run, item, "skipped", "", "已达到差评每日上限")
                     run.skipped_count += 1
                     continue
+                pacing_seconds = settings.get("send_pacing_seconds", 0.0)
+                if pacing_seconds > 0:
+                    time.sleep(pacing_seconds)
                 decision = self._process_item(run, item, settings)
                 if decision == "sent":
                     run.sent_count += 1
@@ -580,6 +591,12 @@ def _get_auto_reply_settings(db: Session) -> Dict[str, Any]:
             200,
             DEFAULT_AUTO_REPLY_SETTINGS["scan_pool_multiplier"],
         ),
+        "send_pacing_seconds": _clamp_float(
+            values.get("customer_ai_auto_reply_send_pacing_seconds"),
+            0.0,
+            30.0,
+            DEFAULT_AUTO_REPLY_SETTINGS["send_pacing_seconds"],
+        ),
     }
 
 
@@ -860,6 +877,15 @@ def _clamp_int(value: Any, min_value: int, max_value: int, default: Optional[int
     except Exception:
         parsed = default if default is not None else min_value
     return max(min_value, min(max_value, parsed))
+
+
+def _clamp_float(value: Any, min_value: float, max_value: float, default: Optional[float] = None) -> float:
+    """P3-2 辅助：float 版 clamp，用于 send_pacing_seconds 等小数配置。"""
+    try:
+        parsed = float(value)
+    except Exception:
+        parsed = default if default is not None else min_value
+    return max(float(min_value), min(float(max_value), parsed))
 
 
 def _now() -> datetime:

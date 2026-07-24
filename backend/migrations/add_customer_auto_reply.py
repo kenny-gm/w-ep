@@ -29,6 +29,7 @@ DEFAULT_SETTINGS = {
     "customer_ai_auto_reply_consecutive_failures_pause": ("5", "连续失败达到该数量后自动关闭总开关"),
     "customer_ai_auto_reply_consecutive_failures_window_minutes": ("5", "连续失败时间窗口（分钟），0 表示不启用（向后兼容）"),
     "customer_ai_auto_reply_scan_pool_multiplier": ("50", "候选扫描池倍数（max_per_run * multiplier），1-200"),
+    "customer_ai_auto_reply_send_pacing_seconds": ("0.5", "逐条发送间隔秒数，0-30，0 表示不 pacing"),
 }
 
 
