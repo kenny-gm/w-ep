@@ -36,6 +36,7 @@ class DashboardStats(BaseModel):
     add_to_cart_rate: float = 0
     conversion_rate: float = 0
     ad_cost: float = 0
+    unified_bidding_ad_cost: float = 0  # “统一出价”广告费子项: payment_type=cpm + placements=search+rec
     ad_ratio: float = 0
     ad_ratio_alert: str = "normal"
     currency: str = "RUB"
@@ -70,6 +71,24 @@ def get_ad_cost_currency(shop: "Shop") -> str:
     if shop.platform == "yandex" or shop.currency == "CNY":
         return "CNY"
     return "RUB"
+
+
+def get_ad_form(ad_record) -> str:
+    """广告形式判定(Kenny 16:08 定义):
+    - payment_type='cpm' + placements='search+rec' → '统一出价'
+    - placements='search'                      → '搜索广告'
+    - placements='recommendations'              → '推荐广告'
+    - 其他                                       → '其他'
+    """
+    payment_type = (getattr(ad_record, "payment_type", "") or "").strip().lower()
+    placements = (getattr(ad_record, "placements", "") or "").strip().lower()
+    if payment_type == "cpm" and placements == "search+rec":
+        return "统一出价"
+    if placements == "search":
+        return "搜索广告"
+    if placements == "recommendations":
+        return "推荐广告"
+    return "其他"
 
 
 def convert_ad_cost(ad_record, shop_rates: dict) -> float:
@@ -296,7 +315,10 @@ def get_dashboard_stats(
 
         # 广告费用(Yandex CNY 需转 RUB,WB RUB 直接累加)
         for ad in ads_costs:
-            stats.ad_cost += convert_ad_cost(ad, shop_rates)
+            cost = convert_ad_cost(ad, shop_rates)
+            stats.ad_cost += cost
+            if get_ad_form(ad) == "统一出价":
+                stats.unified_bidding_ad_cost += cost
     else:
         # 场景:无负责人筛选
         # 从analytics表获取店铺级别汇总
@@ -342,7 +364,10 @@ def get_dashboard_stats(
 
         # 广告费用(Yandex CNY 需转 RUB,WB RUB 直接累加)
         for ad in ads_costs:
-            stats.ad_cost += convert_ad_cost(ad, shop_rates)
+            cost = convert_ad_cost(ad, shop_rates)
+            stats.ad_cost += cost
+            if get_ad_form(ad) == "统一出价":
+                stats.unified_bidding_ad_cost += cost
 
     # 计算转化率等指标
     if stats.visitors > 0:
@@ -393,7 +418,7 @@ def get_dashboard_stats(
                 prev_ads_query = prev_ads_query.filter(AdRecord.shop_id.in_(filter_data.shop_ids))
 
             prev_ads = prev_ads_query.all()
-            prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0}
+            prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0, "unified_bidding_ad_cost": 0}
             for ad in prev_ads:
                 ad_shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5})
                 prev_stats["sales_amount"] += convert_currency(ad.sales or 0, ad_shop_cfg["currency"], ad_shop_cfg["rate"])
@@ -401,7 +426,7 @@ def get_dashboard_stats(
                 prev_stats["add_to_cart"] += ad.cart_count or 0
                 prev_stats["order_count"] += ad.order_count or 0
         else:
-            prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0}
+            prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0, "unified_bidding_ad_cost": 0}
     else:
         # 上一周期无负责人筛选
         prev_ads_query = db.query(AdRecord).filter(
@@ -413,7 +438,7 @@ def get_dashboard_stats(
             prev_ads_query = prev_ads_query.filter(AdRecord.shop_id.in_(filter_data.shop_ids))
 
         prev_ads = prev_ads_query.all()
-        prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0}
+        prev_stats = {"sales_amount": 0, "order_count": 0, "visitors": 0, "add_to_cart": 0, "ad_cost": 0, "unified_bidding_ad_cost": 0}
 
         for ad in prev_ads:
             ad_shop_cfg = shop_rates.get(ad.shop_id, {"currency": "RUB", "rate": 12.5})
@@ -433,7 +458,10 @@ def get_dashboard_stats(
 
         prev_ads_costs = prev_ads_cost_query.all()
         for ad in prev_ads_costs:
-            prev_stats["ad_cost"] += convert_ad_cost(ad, shop_rates)
+            cost = convert_ad_cost(ad, shop_rates)
+            prev_stats["ad_cost"] += cost
+            if get_ad_form(ad) == "统一出价":
+                prev_stats["unified_bidding_ad_cost"] += cost
 
     # 计算同比百分比
     def calc_percent(current, previous):
@@ -455,6 +483,7 @@ def get_dashboard_stats(
             prev_stats["visitors"] > 0 and (prev_stats["order_count"] / prev_stats["visitors"] * 100) or 0
         ),
         "ad_cost": calc_percent(stats.ad_cost, prev_stats["ad_cost"]),
+        "unified_bidding_ad_cost": calc_percent(stats.unified_bidding_ad_cost, prev_stats["unified_bidding_ad_cost"]),
         "ad_ratio": calc_percent(
             stats.ad_ratio * 100,
             prev_stats["sales_amount"] > 0 and (prev_stats["ad_cost"] / prev_stats["sales_amount"] * 100) or 0
