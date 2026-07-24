@@ -10,10 +10,13 @@ Wildberries 客服 API 客户端
 """
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Dict, Iterable, Optional
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class WBCustomerRateLimit(Exception):
@@ -93,6 +96,15 @@ class WBCustomerClient:
                     response_text=response.text[:500],
                 )
             except WBCustomerRateLimit:
+                # P1-2 修复：WB 侧 429/420 限流 → 退避重试，避免一次抖动击穿整批发送
+                if attempt < retry:
+                    wait_seconds = 2.0 * (attempt + 1)
+                    logger.warning(
+                        "WB API 429/420 触发退避（第 %d/%d 次重试，sleep %.1fs）",
+                        attempt + 1, retry, wait_seconds,
+                    )
+                    time.sleep(wait_seconds)
+                    continue
                 raise
             except WBCustomerAPIError:
                 raise
