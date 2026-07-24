@@ -64,7 +64,7 @@
                   v-if="section.currency"
                   v-model="section.shopIds"
                   class="section-shop-filter"
-                  :placeholder="section.currency + ' 全部店铺'"
+                  :placeholder="section.title + ' 全部店铺'"
                   clearable
                   multiple
                   collapse-tags
@@ -167,8 +167,8 @@ function createTrend() {
 
 const metricSections = reactive([
   { key: 'unified', title: '统一卢布', subtitle: '全部店铺统一折算为 RUB', currency: null, displayCurrency: 'RUB', amountUnit: '₽', shopIds: [], summary: createSummary(), trend: createTrend() },
-  { key: 'rub', title: '本土店铺', subtitle: 'RUB 本币显示', currency: 'RUB', displayCurrency: 'RUB', amountUnit: '₽', shopIds: [], summary: createSummary(), trend: createTrend() },
-  { key: 'cny', title: '跨境店铺', subtitle: 'CNY 本币显示', currency: 'CNY', displayCurrency: 'NATIVE', amountUnit: '¥', shopIds: [], summary: createSummary(), trend: createTrend() },
+  { key: 'rub', title: '本土店铺', subtitle: '币种：RUB', currency: 'RUB', displayCurrency: 'RUB', amountUnit: '₽', shopIds: [], summary: createSummary(), trend: createTrend() },
+  { key: 'cny', title: '跨境店铺', subtitle: '币种：CNY', currency: 'CNY', displayCurrency: 'NATIVE', amountUnit: '¥', shopIds: [], summary: createSummary(), trend: createTrend() },
 ])
 
 const metricCards = [
