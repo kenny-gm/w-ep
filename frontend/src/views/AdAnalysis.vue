@@ -302,6 +302,44 @@
       <CpmRecommendationsTable :data="cpmRecommendationsData" :currency-symbol="currentCurrencySymbol" />
     </el-card>
 
+    <!-- 统一出价广告（Kenny 16:08 定义: payment_type=cpm + placements=search+rec） -->
+    <el-card class="box-card unified-bidding-card" style="margin-bottom: 16px">
+      <template #header>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-weight: 600; color: #ef4444;">统一出价广告</span>
+            <el-tag size="small" type="danger" effect="plain">cpm + search+rec</el-tag>
+          </div>
+          <div style="display: flex; gap: 24px; font-size: 13px; color: #606266;">
+            <span>广告数 <strong style="color:#ef4444;">{{ unifiedBiddingData.total_advert_count }}</strong></span>
+            <span>消耗 <strong style="color:#ef4444;">¥{{ formatNumber(unifiedBiddingData.total_cost) }}</strong></span>
+            <span>展现 <strong>{{ formatNumber(unifiedBiddingData.total_impressions) }}</strong></span>
+            <span>点击 <strong>{{ formatNumber(unifiedBiddingData.total_clicks) }}</strong></span>
+          </div>
+        </div>
+      </template>
+      <el-table :data="unifiedBiddingData.adverts" size="small" stripe max-height="320" empty-text="该时段无统一出价广告">
+        <el-table-column prop="advert_id" label="广告 ID" width="110" />
+        <el-table-column prop="record_count" label="记录数" width="80" align="right" />
+        <el-table-column prop="impressions" label="展现" width="100" align="right" :formatter="(r) => formatNumber(r.impressions)" />
+        <el-table-column prop="clicks" label="点击" width="100" align="right" :formatter="(r) => formatNumber(r.clicks)" />
+        <el-table-column prop="cost" label="消耗" width="120" align="right">
+          <template #default="{ row }">¥{{ formatNumber(row.cost) }}</template>
+        </el-table-column>
+        <el-table-column prop="sales" label="销售额" width="120" align="right">
+          <template #default="{ row }">¥{{ formatNumber(row.sales) }}</template>
+        </el-table-column>
+        <el-table-column prop="orders" label="订单" width="80" align="right" />
+        <el-table-column prop="shop_ids" label="店铺" width="120">
+          <template #default="{ row }">
+            <el-tag v-for="sid in row.shop_ids" :key="sid" size="small" type="info" effect="plain" style="margin-right: 4px;">#{{ sid }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="first_date" label="首次" width="110" />
+        <el-table-column prop="last_date" label="末次" width="110" />
+      </el-table>
+    </el-card>
+
     <!-- CPC搜索广告（绿色半透明背景） -->
     <el-card class="box-card cpc-combined-card" style="margin-bottom: 16px">
       <template #header>
@@ -401,7 +439,8 @@ const cpcKeywordsExpanded = ref(false)  // CPC搜索关键词折叠状态
 const cpmSearchExpanded = ref(true)   // CPM搜索广告折叠状态（默认展开）
 const cpmKeywordsExpanded = ref(false)  // CPM搜索关键词折叠状态
 const cpmKeywordsData = ref([])  // CPM搜索关键词数据
-const hasAdData = computed(() => cpmRecommendationsData.value.length > 0 || cpmSearchData.value.length > 0 || cpcDailyData.value.length > 0)
+const unifiedBiddingData = ref({ adverts: [], total_cost: 0, total_impressions: 0, total_clicks: 0, total_advert_count: 0, definition: 'payment_type=cpm + placements=search+rec' })  // 统一出价广告汇总
+const hasAdData = computed(() => cpmRecommendationsData.value.length > 0 || cpmSearchData.value.length > 0 || cpcDailyData.value.length > 0 || unifiedBiddingData.value.adverts.length > 0)
 
 
 // 占比计算
@@ -895,6 +934,16 @@ async function fetchAdData() {
     } catch (e) {
       console.error(`[CPC关键词] /keyword-stats?payment_type=cpc 接口失败:`, e)
       cpcKeywordsData.value = []
+    }
+
+    // 获取统一出价广告汇总 (Kenny 16:08 定义: cpm + search+rec)
+    try {
+      const unifiedResp = await axios.get(`/api/ads/unified-bidding/summary/`, {
+        params: { date_from: dateFrom, date_to: dateTo }
+      })
+      unifiedBiddingData.value = unifiedResp.data || unifiedBiddingData.value
+    } catch (e) {
+      console.error('[统一出价] /api/ads/unified-bidding/summary/ 接口失败:', e)
     }
     
     // 获取CPM搜索关键词数据
