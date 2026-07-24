@@ -252,7 +252,12 @@ class CustomerAutoReplyService:
         # run #3 切 send 后扫到同一 item 同一 latest_buyer_message_id → 误判为"已处理" → 200/200 skipped
         if run.mode == "dry_run":
             auto_reply_key = f"dry_run:{auto_reply_key}"
-        if self.db.query(CustomerAutoReplyItem).filter(CustomerAutoReplyItem.auto_reply_key == auto_reply_key).first():
+        if self.db.query(CustomerAutoReplyItem).filter(
+            CustomerAutoReplyItem.auto_reply_key == auto_reply_key,
+            # P3-4 修复：只认 'sent' 算'已处理过'，failed/blocked 不算（它们是 AI 尝试过但未真发）
+            # 今晚事故中 169 failed item 全部占了唯一索引，导致后续 run 永远进不了 AI 处理
+            CustomerAutoReplyItem.decision == "sent",
+        ).first():
             self._record_report_item(run, item, "skipped", "", "该买家消息已处理过", None, latest_buyer_message_id)
             return "skipped"
 
