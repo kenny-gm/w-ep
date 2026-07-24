@@ -184,6 +184,13 @@
               <div class="queue-card-state">
                 <span class="queue-card-channel" :class="`channel-${item.channel}`">{{ channelLabel(item.channel) }}</span>
                 <span
+                  v-if="item.last_handled_by === 'ai_auto_reply'"
+                  class="queue-card-ai-tag"
+                  title="AI 自动回复过此条"
+                >
+                  ✨ AI 已回
+                </span>
+                <span
                   v-if="getDisplayStatus(item)"
                   class="queue-card-status"
                   :class="'status-' + getDisplayStatus(item).key"
@@ -1794,6 +1801,19 @@ function getReturnSlaClass(item) {
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
+}
+
+.queue-card-ai-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  letter-spacing: 0.2px;
+  box-shadow: 0 1px 2px rgba(102, 126, 234, 0.3);
 }
 
 .queue-card-channel {
