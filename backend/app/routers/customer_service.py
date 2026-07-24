@@ -31,6 +31,7 @@ from app.models.models import (
     CustomerServiceMessage,
     Shop,
     SyncLog,
+    SystemSetting,
     User,
 )
 from app.routers.auth import get_current_user
@@ -225,7 +226,25 @@ def get_auto_reply_settings(
     current_user: User = Depends(get_current_user),
 ):
     require_cs_permission(current_user, "customer_service:read")
-    return CustomerAutoReplyService(db).get_settings()
+    settings = CustomerAutoReplyService(db).get_settings()
+    # P0-2 接口修复：enabled=false 时附带暂停元数据，供前端 banner 显示
+    if not settings.get("enabled"):
+        enabled_row = db.query(SystemSetting).filter(
+            SystemSetting.key == "customer_ai_auto_reply_enabled"
+        ).first()
+        settings["paused_at"] = _fmt(enabled_row.updated_at) if enabled_row else None
+        # 触发原因目前唯一：连续失败 auto-pause
+        settings["pause_reason"] = "consecutive_failures"
+        # 最近一次失败的错误信息（block_reason），UI banner 可直接展示
+        last_failed = db.query(CustomerAutoReplyItem).filter(
+            CustomerAutoReplyItem.decision == "failed"
+        ).order_by(CustomerAutoReplyItem.created_at.desc()).first()
+        settings["last_error"] = last_failed.block_reason if last_failed else None
+    else:
+        settings["paused_at"] = None
+        settings["pause_reason"] = None
+        settings["last_error"] = None
+    return settings
 
 
 @router.put("/auto-reply/settings")
